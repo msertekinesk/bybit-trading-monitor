@@ -16,7 +16,12 @@ TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 BASE_URL   = "https://data-api.binance.vision"
-WATCHLIST  = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
+WATCHLIST  = [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
+    "DOGEUSDT", "ADAUSDT", "TRXUSDT", "AVAXUSDT", "LINKUSDT",
+    "DOTUSDT", "SUIUSDT", "LTCUSDT", "NEARUSDT", "UNIUSDT",
+    "APTUSDT", "TONUSDT", "XLMUSDT", "ATOMUSDT", "HBARUSDT",
+]
 DECISIONS_FILE = os.path.join(os.path.dirname(__file__), "decisions.jsonl")
 TZ_LOCAL = timezone(timedelta(hours=3))  # UTC+3
 
