@@ -17,13 +17,18 @@ Bu proje bir **paper trading / testnet öğrenme ortamı**. Gerçek para yok, By
 
 ## Watchlist (İzlenen Pariteler)
 
-Şu beş pariteyle ilgilen:
-- `BTCUSDT` (linear perpetual)
-- `ETHUSDT` (linear perpetual)
-- `SOLUSDT` (linear perpetual)
-- `BNBUSDT` (linear perpetual — Bybit mainnet'te mevcut, doğrulandı)
-- `XRPUSDT` (linear perpetual)
+snapshot.py ve GitHub Actions için 20 coin, kategoriye göre:
 
+| Kategori  | Coinler |
+|-----------|---------|
+| MAJORS    | BTCUSDT, ETHUSDT |
+| L1 ALTS   | SOLUSDT, BNBUSDT, AVAXUSDT, NEARUSDT, APTUSDT, SUIUSDT, ADAUSDT, TRXUSDT |
+| DEFI      | LINKUSDT, UNIUSDT, DOTUSDT |
+| STORIES   | TONUSDT, HBARUSDT, ATOMUSDT, XLMUSDT, XRPUSDT |
+| MEMES     | DOGEUSDT |
+| LEGACY    | LTCUSDT |
+
+Manuel analiz için beş çekirdek parite: BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT.
 Başka pariteler hakkında soru gelirse "watchlist dışında" de, ama yine de yardım edebilirsen et.
 
 ## Varsayılan Zaman Dilimi
@@ -35,20 +40,36 @@ Kullanıcı bir parite hakkında sorduğunda, aksi belirtilmedikçe 15dk grafiğ
 
 ## Bias Değerlendirme Çerçevesi
 
-Bir parite için "bias nedir?" sorusu geldiğinde şu kontrolleri yap:
+Her timeframe için tek-TF bias kuralı:
 
-**Bullish bias için:**
-- 15dk fiyatı 50 EMA üzerinde
-- 1H ve 4H'da higher highs / higher lows yapısı
+**Bullish bias için (tek TF):**
+- Fiyat EMA50 üzerinde
 - RSI(14) 45-70 arası (overbought değil)
 
-**Bearish bias için:**
-- 15dk fiyatı 50 EMA altında
-- 1H ve 4H'da lower highs / lower lows yapısı
+**Bearish bias için (tek TF):**
+- Fiyat EMA50 altında
 - RSI(14) 30-55 arası (oversold değil)
 
-**Neutral:**
-- Yukarıdakilerin hiçbiri net değilse "neutral / chop" de
+**Neutral:** Yukarıdakilerin hiçbiri net değilse.
+
+### Multi-Timeframe Consensus
+
+Her parite için 15m, 1h, 4h timeframe'leri ayrı ayrı değerlendir, sonra consensus al:
+
+| Sonuç | Koşul |
+|-------|-------|
+| STRONG BULLISH | 3/3 bullish |
+| STRONG BEARISH | 3/3 bearish |
+| BULLISH | 2/3 bullish |
+| BEARISH | 2/3 bearish |
+| MIXED | Geri kalan tüm durumlar |
+
+### Volume Filtresi
+
+15m'de son mum hacmini son 20 mumun ortalamasıyla karşılaştır:
+- ratio ≥ 1.5 → HIGH VOL
+- ratio ≤ 0.5 → LOW VOL
+- Arada → NORMAL VOL
 
 Her bias değerlendirmesinde **hangi göstergeye baktığını** açıkla. "Bullish" deyip geçme.
 
