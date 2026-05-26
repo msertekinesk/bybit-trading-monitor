@@ -113,6 +113,64 @@ def volume_signal(df: pd.DataFrame) -> str:
     return "NORMAL VOL"
 
 
+def detect_setup(symbol, price, tf_biases, consensus, volume_signal_str, df_15m):
+    if consensus not in ("STRONG BULLISH", "STRONG BEARISH"):
+        return None
+    if volume_signal_str == "LOW VOL":
+        return None
+
+    last_20_low  = df_15m["low"].iloc[-20:].min()
+    last_20_high = df_15m["high"].iloc[-20:].max()
+
+    if consensus == "STRONG BULLISH":
+        entry  = price
+        stop   = last_20_low * 0.998
+        target = df_15m["high"].iloc[-50:].quantile(0.75)
+        risk   = entry - stop
+        reward = target - entry
+        if risk <= 0 or reward <= 0:
+            return None
+        rr = reward / risk
+        if rr < 1.5:
+            return None
+        return {
+            "direction": "LONG",
+            "entry":  round(entry, 6),
+            "stop":   round(stop, 6),
+            "target": round(target, 6),
+            "rr":     round(rr, 2),
+            "reasoning": (
+                f"STRONG BULLISH ({tf_biases}), volume {volume_signal_str}, "
+                f"support bounce at {round(last_20_low, 6)}"
+            ),
+        }
+
+    elif consensus == "STRONG BEARISH":
+        entry  = price
+        stop   = last_20_high * 1.002
+        target = df_15m["low"].iloc[-50:].quantile(0.25)
+        risk   = stop - entry
+        reward = entry - target
+        if risk <= 0 or reward <= 0:
+            return None
+        rr = reward / risk
+        if rr < 1.5:
+            return None
+        return {
+            "direction": "SHORT",
+            "entry":  round(entry, 6),
+            "stop":   round(stop, 6),
+            "target": round(target, 6),
+            "rr":     round(rr, 2),
+            "reasoning": (
+                f"STRONG BEARISH ({tf_biases}), volume {volume_signal_str}, "
+                f"resistance reject at {round(last_20_high, 6)}"
+            ),
+        }
+
+    return None
+
+
 # ── Formatting ────────────────────────────────────────────────────────────────
 def fmt_price(symbol: str, price: float) -> str:
     if symbol in ("BTCUSDT",):
@@ -191,6 +249,8 @@ def main():
             ema50_15     = calc_ema50(df_15["close"])
             pct_diff     = (price - ema50_15) / ema50_15 * 100
 
+            setup = detect_setup(symbol, price, tf_biases, consensus, vol_signal, df_15)
+
             results_by_symbol[symbol] = {
                 "symbol":        symbol,
                 "price":         price,
@@ -200,8 +260,10 @@ def main():
                 "tf_biases":     tf_biases,
                 "consensus":     consensus,
                 "volume_signal": vol_signal,
+                "setup":         setup,
             }
-            print(f"  {tf_biases}  consensus={consensus}  vol={vol_signal}")
+            setup_tag = f"  SETUP={setup['direction']}" if setup else ""
+            print(f"  {tf_biases}  consensus={consensus}  vol={vol_signal}{setup_tag}")
 
         except Exception as e:
             print(f"  [ERR] {symbol}: {e}")
@@ -212,10 +274,12 @@ def main():
     lines = [sep, f"SNAPSHOT — {ts_label}", sep]
 
     total_counts = {}
+    all_setups = []
 
     for cat, symbols in WATCHLIST_BY_CATEGORY.items():
         lines.append(f"\n═══ {cat} ═══")
         cat_counts = {}
+        cat_setup_count = 0
 
         for sym in symbols:
             if sym not in results_by_symbol:
@@ -228,19 +292,39 @@ def main():
                 f"  15m: {b['15m']:<8} 1h: {b['1h']:<8} 4h: {b['4h']:<8} → {r['consensus']}"
             )
             lines.append(f"  RSI {r['rsi14']:.1f} | Volume: {r['volume_signal']}")
+            if r["setup"]:
+                s = r["setup"]
+                lines.append(
+                    f"  ↪ {s['direction']} SETUP: entry {fmt_price(sym, s['entry'])} | "
+                    f"stop {fmt_price(sym, s['stop'])} | target {fmt_price(sym, s['target'])} | "
+                    f"R:R {s['rr']}:1"
+                )
+                cat_setup_count += 1
+                all_setups.append((sym, r["setup"]))
 
             c = r["consensus"]
             cat_counts[c] = cat_counts.get(c, 0) + 1
             total_counts[c] = total_counts.get(c, 0) + 1
 
-        # Category summary
         summary_parts = [f"{v} {k}" for k, v in sorted(cat_counts.items())]
-        lines.append(f"→ {', '.join(summary_parts)}")
+        setup_suffix = f" | {cat_setup_count} SETUP" if cat_setup_count else ""
+        lines.append(f"→ {', '.join(summary_parts)}{setup_suffix}")
 
     lines += ["", sep]
     total_parts = [f"{v} {k}" for k, v in sorted(total_counts.items())]
-    lines.append(f"Genel: {', '.join(total_parts)}")
+    total_setup_count = len(all_setups)
+    setup_total_suffix = f" | {total_setup_count} SETUP" if total_setup_count else ""
+    lines.append(f"Genel: {', '.join(total_parts)}{setup_total_suffix}")
     lines.append(sep)
+
+    if all_setups:
+        lines.append(f"\n═══ AKTİF SETUPLAR ({total_setup_count}) ═══")
+        for sym, s in all_setups:
+            lines.append(
+                f"{sym} {s['direction']}  entry {fmt_price(sym, s['entry'])}  R:R {s['rr']}:1"
+            )
+        lines.append(sep)
+
     if errors:
         lines.append(f"HATALAR: {'; '.join(errors)}")
 
@@ -269,6 +353,7 @@ def main():
                     f"({r['pct_diff']:+.2f}%), RSI {r['rsi14']:.1f}, "
                     f"consensus={r['consensus']}, vol={r['volume_signal']}."
                 ),
+                "setup": r["setup"],
                 "trade_plan": {"entry": None, "stop": None, "target": None, "rr": None},
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -284,6 +369,7 @@ def main():
     for cat, symbols in WATCHLIST_BY_CATEGORY.items():
         tg_lines.append(f"\n<b>═══ {cat} ═══</b>")
         cat_counts = {}
+        cat_setup_count_tg = 0
         for sym in symbols:
             if sym not in results_by_symbol:
                 tg_lines.append(f"{sym}  HATA")
@@ -295,12 +381,30 @@ def main():
                 f"  15m:{b['15m'][:4]}  1h:{b['1h'][:4]}  4h:{b['4h'][:4]}  → {r['consensus']}"
             )
             tg_lines.append(f"  RSI {r['rsi14']:.1f} | {r['volume_signal']}")
+            if r["setup"]:
+                s = r["setup"]
+                tg_lines.append(
+                    f"  ↪ {s['direction']} SETUP: entry {fmt_price(sym, s['entry'])} | "
+                    f"stop {fmt_price(sym, s['stop'])} | target {fmt_price(sym, s['target'])} | "
+                    f"R:R {s['rr']}:1"
+                )
+                cat_setup_count_tg += 1
             c = r["consensus"]
             cat_counts[c] = cat_counts.get(c, 0) + 1
         summary_parts = [f"{v} {k}" for k, v in sorted(cat_counts.items())]
-        tg_lines.append(f"→ {', '.join(summary_parts)}")
+        setup_suffix_tg = f" | {cat_setup_count_tg} SETUP" if cat_setup_count_tg else ""
+        tg_lines.append(f"→ {', '.join(summary_parts)}{setup_suffix_tg}")
 
-    tg_lines += ["", f"<b>Genel: {', '.join(total_parts)}</b>"]
+    setup_total_suffix_tg = f" | {total_setup_count} SETUP" if total_setup_count else ""
+    tg_lines += ["", f"<b>Genel: {', '.join(total_parts)}{setup_total_suffix_tg}</b>"]
+
+    if all_setups:
+        tg_lines.append(f"\n<b>AKTİF SETUPLAR ({total_setup_count})</b>")
+        for sym, s in all_setups:
+            tg_lines.append(
+                f"{sym} {s['direction']}  entry {fmt_price(sym, s['entry'])}  R:R {s['rr']}:1"
+            )
+
     telegram_send_long("\n".join(tg_lines))
 
     print("\n=== SNAPSHOT TAMAMLANDI ===")

@@ -75,12 +75,29 @@ Her bias değerlendirmesinde **hangi göstergeye baktığını** açıkla. "Bull
 
 ## Setup Değerlendirme
 
-"Setup var mı?" sorusunda şunlara bak:
-1. Net bir support/resistance level
-2. Volume davranışı
-3. Risk/reward oranı en az 1.5:1
+snapshot.py'de otomatik setup tespiti `detect_setup()` ile yapılır. Kurallar:
 
-Setup yoksa "şu an net bir setup yok, beklemek daha mantıklı" de. **Zorla setup üretme.**
+1. **Konsensus:** STRONG BULLISH veya STRONG BEARISH olmalı (3/3 TF aynı yönde)
+2. **Volume:** LOW VOL ise setup yok (zayıf onay)
+3. **LONG setup (STRONG BULLISH):**
+   - Entry: güncel fiyat
+   - Stop: son 20 mumun düşüğünün %0.2 altı
+   - Target: son 50 mumun high'larının 75. percentile'ı
+   - R:R ≥ 1.5 zorunlu
+4. **SHORT setup (STRONG BEARISH):**
+   - Entry: güncel fiyat
+   - Stop: son 20 mumun yükseğinin %0.2 üstü
+   - Target: son 50 mumun low'larının 25. percentile'ı
+   - R:R ≥ 1.5 zorunlu
+
+Setup tetiklenirse snapshot'a 4. satır olarak eklenir:
+```
+  ↪ LONG SETUP: entry $X | stop $Y | target $Z | R:R 2.3:1
+```
+
+Snapshot sonunda aktif setup varsa "AKTİF SETUPLAR" özet bloğu eklenir.
+
+Manuel analiz için "Setup var mı?" sorularında da aynı mantığı uygula. **Zorla setup üretme.**
 
 ## Risk Çerçevesi (Sadece referans, testnet'te)
 
