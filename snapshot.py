@@ -30,6 +30,7 @@ WATCHLIST = [coin for coins in WATCHLIST_BY_CATEGORY.values() for coin in coins]
 TIMEFRAMES = ["15m", "1h", "4h"]
 
 DECISIONS_FILE = os.path.join(os.path.dirname(__file__), "decisions.jsonl")
+SETUPS_FILE    = os.path.join(os.path.dirname(__file__), "setups.jsonl")
 TZ_LOCAL = timezone(timedelta(hours=3))
 
 # ── Signing helper (private endpoints) ───────────────────────────────────────
@@ -358,6 +359,52 @@ def main():
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     print(f"  [OK] {len(results_by_symbol)} kayıt eklendi.")
+
+    # ── Write setups.jsonl ────────────────────────────────────────────────────
+    if all_setups:
+        print("[setups.jsonl] Kontrol ediliyor...")
+        existing_active = set()
+        if os.path.exists(SETUPS_FILE):
+            with open(SETUPS_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        if rec.get("status") == "active":
+                            existing_active.add((rec["symbol"], rec["direction"]))
+                    except Exception:
+                        pass
+        ts_utc = now.astimezone(timezone.utc)
+        new_count = 0
+        with open(SETUPS_FILE, "a", encoding="utf-8") as f:
+            for sym, s in all_setups:
+                if (sym, s["direction"]) in existing_active:
+                    continue
+                setup_id = f"{sym}-{ts_utc.strftime('%Y%m%dT%H%M%SZ')}-{s['direction']}"
+                record = {
+                    "setup_id":          setup_id,
+                    "timestamp":         ts_str,
+                    "symbol":            sym,
+                    "direction":         s["direction"],
+                    "entry":             s["entry"],
+                    "stop":              s["stop"],
+                    "target":            s["target"],
+                    "rr_planned":        s["rr"],
+                    "tf_biases":         results_by_symbol[sym]["tf_biases"],
+                    "volume_signal":     results_by_symbol[sym]["volume_signal"],
+                    "status":            "active",
+                    "result":            None,
+                    "result_price":      None,
+                    "result_timestamp":  None,
+                    "duration_minutes":  None,
+                    "actual_rr":         None,
+                }
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                new_count += 1
+        skipped = len(all_setups) - new_count
+        print(f"  [OK] {new_count} yeni setup eklendi ({skipped} zaten aktif).")
 
     # ── Telegram ──────────────────────────────────────────────────────────────
     print("[Telegram] Gönderiliyor...")

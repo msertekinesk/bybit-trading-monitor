@@ -9,6 +9,7 @@ TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 DECISIONS_FILE = os.path.join(os.path.dirname(__file__), "decisions.jsonl")
+SETUPS_FILE    = os.path.join(os.path.dirname(__file__), "setups.jsonl")
 TZ_LOCAL = timezone(timedelta(hours=3))
 
 WATCHLIST_BY_CATEGORY = {
@@ -254,6 +255,68 @@ def main():
         lines.append(f"STRONG BEARISH ({len(strong_bear)}): {coins_str}{vol_note}")
     if not strong_bull and not strong_bear:
         lines.append("Yok")
+
+    # Performance summary from setups.jsonl
+    if os.path.exists(SETUPS_FILE):
+        all_setups_rec = []
+        with open(SETUPS_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        all_setups_rec.append(json.loads(line))
+                    except Exception:
+                        pass
+
+        if all_setups_rec:
+            total   = len(all_setups_rec)
+            active  = sum(1 for s in all_setups_rec if s["status"] == "active")
+            wins    = sum(1 for s in all_setups_rec if s["status"] == "win")
+            losses  = sum(1 for s in all_setups_rec if s["status"] == "loss")
+            timeouts= sum(1 for s in all_setups_rec if s["status"] == "timeout")
+            closed  = wins + losses + timeouts
+            win_rate = int(wins / closed * 100) if closed > 0 else 0
+            closed_rrs   = [s["actual_rr"] for s in all_setups_rec if s["status"] != "active" and s.get("actual_rr") is not None]
+            planned_rrs  = [s["rr_planned"] for s in all_setups_rec if s.get("rr_planned") is not None]
+            net_edge     = round(sum(closed_rrs), 2) if closed_rrs else 0
+            avg_actual   = round(sum(closed_rrs) / len(closed_rrs), 2) if closed_rrs else None
+            avg_planned  = round(sum(planned_rrs) / len(planned_rrs), 2) if planned_rrs else None
+
+            # Last 7 days
+            cutoff_7d = datetime.now(timezone.utc) - timedelta(days=7)
+            rec_7d = []
+            for s in all_setups_rec:
+                try:
+                    ts = datetime.fromisoformat(s["timestamp"]).astimezone(timezone.utc)
+                    if ts >= cutoff_7d:
+                        rec_7d.append(s)
+                except Exception:
+                    pass
+            w7 = sum(1 for s in rec_7d if s["status"] == "win")
+            l7 = sum(1 for s in rec_7d if s["status"] == "loss")
+            t7 = sum(1 for s in rec_7d if s["status"] == "timeout")
+            c7 = w7 + l7 + t7
+            wr7 = int(w7 / c7 * 100) if c7 > 0 else 0
+            rrs7 = [s["actual_rr"] for s in rec_7d if s["status"] != "active" and s.get("actual_rr") is not None]
+            net7 = round(sum(rrs7), 2) if rrs7 else 0
+
+            lines.append("\nPERFORMANS ÖZETİ (TÜM ZAMANLAR)")
+            lines.append(f"Toplam setup: {total}")
+            lines.append(f"Aktif: {active}  Win: {wins}  Loss: {losses}  Timeout: {timeouts}")
+            if closed > 0:
+                lines.append(f"Kazanma oranı: %{win_rate} ({wins}/{closed} kapanan)")
+                if avg_actual is not None:
+                    lines.append(f"Ortalama R:R: {avg_actual} (planlanan: {avg_planned})")
+                lines.append(f"Net edge: {net_edge:+.2f}R (gerçek)")
+            else:
+                lines.append("Henüz kapanan setup yok.")
+
+            lines.append(f"\nSON 7 GÜN")
+            lines.append(f"Setup: {len(rec_7d)} (W: {w7}, L: {l7}, T: {t7})")
+            if c7 > 0:
+                lines.append(f"Kazanma: %{wr7} | Net: {net7:+.2f}R")
+            else:
+                lines.append("Henüz kapanan setup yok.")
 
     lines += ["", sep]
 
