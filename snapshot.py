@@ -15,7 +15,7 @@ BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET", "")
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-BASE_URL   = "https://api.bybit-tr.com"
+BASE_URL   = "https://data-api.binance.vision"
 WATCHLIST  = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 DECISIONS_FILE = os.path.join(os.path.dirname(__file__), "decisions.jsonl")
 TZ_LOCAL = timezone(timedelta(hours=3))  # UTC+3
@@ -37,20 +37,19 @@ def _sign(params: dict) -> dict:
     return params
 
 
-def get_klines(symbol: str, interval: str = "15", limit: int = 200) -> pd.DataFrame:
-    """Fetch kline data from Bybit public API. Returns DataFrame with OHLCV."""
-    url = f"{BASE_URL}/v5/market/kline"
-    params = {"category": "linear", "symbol": symbol, "interval": interval, "limit": limit}
-    print(f"  [API] {symbol} {interval}m kline çekiliyor...")
+def get_klines(symbol: str, interval: str = "15m", limit: int = 200) -> pd.DataFrame:
+    """Fetch kline data from Binance public API. Returns DataFrame with OHLCV."""
+    url = f"{BASE_URL}/api/v3/klines"
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
+    print(f"  [API] {symbol} {interval} kline çekiliyor...")
     resp = requests.get(url, params=params, timeout=10)
     resp.raise_for_status()
-    data = resp.json()
-    if data["retCode"] != 0:
-        raise ValueError(f"Bybit API hatası: {data['retMsg']}")
-    rows = data["result"]["list"]
-    # rows: newest first → reverse for chronological order
-    rows = list(reversed(rows))
-    df = pd.DataFrame(rows, columns=["ts", "open", "high", "low", "close", "volume", "turnover"])
+    rows = resp.json()  # list of lists, ascending (oldest first)
+    # index: 0=open_time, 1=open, 2=high, 3=low, 4=close, 5=volume, ...
+    df = pd.DataFrame(rows, columns=[
+        "ts", "open", "high", "low", "close", "volume",
+        "close_time", "quote_vol", "trades", "taker_base", "taker_quote", "ignore"
+    ])
     for col in ["open", "high", "low", "close", "volume"]:
         df[col] = df[col].astype(float)
     df["ts"] = pd.to_numeric(df["ts"])
@@ -124,7 +123,7 @@ def main():
     for symbol in WATCHLIST:
         print(f"[{symbol}]")
         try:
-            df = get_klines(symbol, interval="15", limit=200)
+            df = get_klines(symbol, interval="15m", limit=200)
             closes  = df["close"]
             price   = closes.iloc[-1]
             ema50   = calc_ema50(closes)
