@@ -15,7 +15,7 @@ BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET", "")
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-BASE_URL   = "https://api.bybit.com"
+BASE_URL   = "https://api.bybit-tr.com"
 WATCHLIST  = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
 DECISIONS_FILE = os.path.join(os.path.dirname(__file__), "decisions.jsonl")
 TZ_LOCAL = timezone(timedelta(hours=3))  # UTC+3
