@@ -207,6 +207,8 @@ BTCUSDT
   EMA50:    $Y (fiyat üstünde/altında, %Z)
   RSI(14):  X.X
   Bias:     bullish/bearish/neutral
+  VP:       POC $X | VA $Y - $Z
+  Sweep:    bullish_sweep/bearish_sweep/none
   Setup:    var/yok
   [setup varsa kısa açıklama]
 
@@ -215,6 +217,8 @@ ETHUSDT
   EMA50:    $Y (fiyat üstünde/altında, %Z)
   RSI(14):  X.X
   Bias:     bullish/bearish/neutral
+  VP:       POC $X | VA $Y - $Z
+  Sweep:    bullish_sweep/bearish_sweep/none
   Setup:    var/yok
   [setup varsa kısa açıklama]
 
@@ -222,6 +226,71 @@ Genel: [tek cümle özet]
 
 ═══════════════════════════════════════
 ```
+
+## Volume Profile
+
+Her snapshot'ta her coin için son 200 mum 15m verisiyle volume profile hesaplanır.
+
+**Hesaplama:**
+- Fiyat aralığı 50 eşit bucket'a bölünür
+- Her mum volume'u o mumun kapandığı bucket'a atanır
+- **POC (Point of Control):** En yüksek volume'un olduğu fiyat seviyesi
+- **Value Area:** Toplam volume'un %70'ini kapsayan POC etrafındaki aralık (VAL = alt sınır, VAH = üst sınır)
+
+**Kayıt:** decisions.jsonl'a `"volume_profile": {"poc": X, "val": Y, "vah": Z}` olarak eklenir.
+
+**Telegram:** Her coin bloğuna `POC: $X | VA: $Y - $Z` satırı eklenir.
+
+**Trading mantığı:**
+- POC = mıknatıs seviyesi, fiyat oraya çekilme eğilimindedir
+- VAL/VAH = value area sınırları; fiyat dışına çıkarsa dönüş veya breakout ihtimali artar
+- Fiyat POC'tan uzaklaşmışsa "POC'a yakın mı?" sorusunun cevabı `poc_distance_%` ile belirlenir
+
+---
+
+## Liquidity Sweep Tespiti
+
+Her snapshot'ta her coin için son 50 mum 15m verisinde liquidity sweep aranır.
+
+**Tespit kuralları:**
+1. Son 50 mumda swing high/low'lar tespit edilir (komşularından yüksek/düşük olan mumlar)
+2. Son 3 mumda bu seviyelerin "kırılıp geri dönmesi" (wick geçti, kapanış geçmedi) kontrol edilir
+3. **Volume confirmation:** Süpürme mumunun volume'u son 20 mum ortalaması × 1.3+ olmalı
+4. **Rejection strength:** Kapanış, mum gövdesinin %50'sinden fazlası ters yönde olmalı
+
+**Etiketler:**
+- `bullish_sweep`: Swing low süpürüldü, fiyat yukarı döndü → aşağıdaki likidite temizlendi
+- `bearish_sweep`: Swing high süpürüldü, fiyat aşağı döndü → yukarıdaki likidite temizlendi
+- `none`: Tespit yok
+
+**Kayıt:** decisions.jsonl'a `"liquidity_sweep": {"type": "bullish_sweep|bearish_sweep|none", "sweep_level": X, "rejection_strength": Y}` olarak eklenir.
+
+**Telegram:** Sweep varsa `Liquidity Sweep: bullish/bearish (level $X süpürüldü)` satırı eklenir.
+
+---
+
+## Setup Tetikleme Genişletmesi
+
+Mevcut kural (STRONG konsensus + NORMAL/HIGH VOL + R:R ≥ 1.5) korunur.
+
+**Yeni STRONG_SWEEP bonusu:**
+- Yukarıdaki tüm koşullar sağlanıyorsa **VE** liquidity sweep konsensusla aynı yöndeyse
+- Setup etiketi `"STRONG_SWEEP"` olarak işaretlenir
+- `trigger_reasons` listesine `"Liquidity sweep bonus"` eklenir
+- Snapshot çıktısında `↪ LONG SETUP [STRONG_SWEEP]` şeklinde gösterilir
+
+---
+
+## Dashboard
+
+**Ana coin tablosu — ek kolonlar:**
+- `POC%`: Güncel fiyatın POC'a uzaklığı (%) — `(price - poc) / poc * 100`
+
+**Coin detay sayfası:**
+- Volume profile yatay histogram (her bucket'ın volume'u bar olarak)
+- POC, VAL, VAH seviyeleri fiyat ekseni üzerinde işaretlenir
+
+---
 
 ## Karar Logu
 
@@ -240,11 +309,22 @@ Her bias değerlendirmesi, setup analizi veya watchlist güncellemesi sonunda ka
   "ema50": 77402.02,
   "rsi14": 46.5,
   "details": "kısa metin, neden bu karara vardın",
+  "volume_profile": {
+    "poc": null,
+    "val": null,
+    "vah": null
+  },
+  "liquidity_sweep": {
+    "type": "none",
+    "sweep_level": null,
+    "rejection_strength": null
+  },
   "trade_plan": {
     "entry": null,
     "stop": null,
     "target": null,
-    "rr": null
+    "rr": null,
+    "setup_strength": null
   }
 }
 ```
