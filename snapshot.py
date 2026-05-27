@@ -115,7 +115,7 @@ def volume_signal(df: pd.DataFrame) -> str:
     return "NORMAL VOL"
 
 
-def detect_setup(symbol, price, tf_biases, consensus, volume_signal_str, df_15m):
+def detect_setup(symbol, price, tf_biases, consensus, volume_signal_str, df_15m, rsi_15m=0.0):
     if consensus not in ("STRONG BULLISH", "STRONG BEARISH"):
         return None
     if volume_signal_str == "LOW VOL":
@@ -125,52 +125,56 @@ def detect_setup(symbol, price, tf_biases, consensus, volume_signal_str, df_15m)
     last_20_high = df_15m["high"].iloc[-20:].max()
 
     if consensus == "STRONG BULLISH":
+        direction = "LONG"
         entry  = price
         stop   = last_20_low * 0.998
         target = df_15m["high"].iloc[-50:].quantile(0.75)
         risk   = entry - stop
         reward = target - entry
-        if risk <= 0 or reward <= 0:
-            return None
-        rr = reward / risk
-        if rr < 1.5:
-            return None
-        return {
-            "direction": "LONG",
-            "entry":  round(entry, 6),
-            "stop":   round(stop, 6),
-            "target": round(target, 6),
-            "rr":     round(rr, 2),
-            "reasoning": (
-                f"STRONG BULLISH ({tf_biases}), volume {volume_signal_str}, "
-                f"support bounce at {round(last_20_low, 6)}"
-            ),
-        }
-
-    elif consensus == "STRONG BEARISH":
+        key_level = last_20_low
+        inv_dir   = "altına"
+    else:
+        direction = "SHORT"
         entry  = price
         stop   = last_20_high * 1.002
         target = df_15m["low"].iloc[-50:].quantile(0.25)
         risk   = stop - entry
         reward = entry - target
-        if risk <= 0 or reward <= 0:
-            return None
-        rr = reward / risk
-        if rr < 1.5:
-            return None
-        return {
-            "direction": "SHORT",
-            "entry":  round(entry, 6),
-            "stop":   round(stop, 6),
-            "target": round(target, 6),
-            "rr":     round(rr, 2),
-            "reasoning": (
-                f"STRONG BEARISH ({tf_biases}), volume {volume_signal_str}, "
-                f"resistance reject at {round(last_20_high, 6)}"
-            ),
-        }
+        key_level = last_20_high
+        inv_dir   = "üstüne"
 
-    return None
+    if risk <= 0 or reward <= 0:
+        return None
+    rr = reward / risk
+    if rr < 1.5:
+        return None
+
+    risk_pct   = (risk / entry) * 100
+    reward_pct = (reward / entry) * 100
+    pos_dollars = round(10 / (risk_pct / 100), 2)  # $10 risk on $1000 account
+    pos_coins   = round(pos_dollars / entry, 6)
+
+    return {
+        "direction":             direction,
+        "entry":                 round(entry, 6),
+        "stop":                  round(stop, 6),
+        "target":                round(target, 6),
+        "rr":                    round(rr, 2),
+        "risk_pct":              round(risk_pct, 4),
+        "reward_pct":            round(reward_pct, 4),
+        "position_size_dollars": pos_dollars,
+        "position_size_coins":   pos_coins,
+        "trigger_reasons": [
+            f"3/3 {consensus}",
+            f"Volume {volume_signal_str}",
+            f"RSI(15m) {rsi_15m:.1f}",
+        ],
+        "invalidation": f"Fiyat {round(stop, 6)} {inv_dir} 4H kapanış",
+        "reasoning": (
+            f"{consensus} ({tf_biases}), volume {volume_signal_str}, "
+            f"key level {round(key_level, 6)}"
+        ),
+    }
 
 
 # ── Formatting ────────────────────────────────────────────────────────────────
@@ -201,6 +205,38 @@ def telegram_send(text: str) -> None:
             print(f"  [ERR] Telegram: {r.json()}")
     except Exception as e:
         print(f"  [ERR] Telegram isteği başarısız: {e}")
+
+
+def format_setup_block(sym: str, s: dict) -> str:
+    entry = s["entry"]; stop = s["stop"]; target = s["target"]; rr = s["rr"]
+    risk_a  = abs(entry - stop)
+    rew_a   = abs(target - entry)
+    risk_p  = s.get("risk_pct",  (risk_a / entry) * 100)
+    rew_p   = s.get("reward_pct", (rew_a / entry) * 100)
+    pos_d   = s.get("position_size_dollars", round(10 / (risk_p / 100), 2))
+    pos_c   = s.get("position_size_coins",   round(pos_d / entry, 6))
+    rew_d   = round(pos_d * (rew_p / 100), 2)
+    coin_lbl = sym.replace("USDT", "")
+    inv_dir  = "üstüne" if s["direction"] == "SHORT" else "altına"
+
+    rows = [
+        f"🚨 SETUP: <b>{sym} {s['direction']}</b>",
+        "━━━━━━━━━━━━━━━━━━━━━",
+        f"Entry:   <code>{fmt_price(sym, entry)}</code>",
+        f"Stop:    <code>{fmt_price(sym, stop)}</code>  (risk: {fmt_price(sym, risk_a)}, %{risk_p:.2f})",
+        f"Target:  <code>{fmt_price(sym, target)}</code>  (kazanç: {fmt_price(sym, rew_a)}, %{rew_p:.2f})",
+        f"R:R:     <b>{rr}:1</b>",
+        "",
+        "Pozisyon (%1 risk @ $1000):",
+        f"  Size:   ${pos_d:,.0f} (≈ {pos_c:.4g} {coin_lbl})",
+        f"  Risk:   $10.00",
+        f"  Reward: ${rew_d:.2f}",
+    ]
+    reasons = s.get("trigger_reasons", [])
+    if reasons:
+        rows += ["", "Tetikleyici:"] + [f"  • {r}" for r in reasons]
+    rows += ["", "İptal koşulu:", f"  Fiyat {fmt_price(sym, stop)} {inv_dir} 4H kapanış"]
+    return "\n".join(rows)
 
 
 def telegram_send_long(text: str) -> None:
@@ -251,7 +287,7 @@ def main():
             ema50_15     = calc_ema50(df_15["close"])
             pct_diff     = (price - ema50_15) / ema50_15 * 100
 
-            setup = detect_setup(symbol, price, tf_biases, consensus, vol_signal, df_15)
+            setup = detect_setup(symbol, price, tf_biases, consensus, vol_signal, df_15, rsi_15m=tf_rsi["15m"])
 
             results_by_symbol[symbol] = {
                 "symbol":        symbol,
@@ -385,22 +421,28 @@ def main():
                     continue
                 setup_id = f"{sym}-{ts_utc.strftime('%Y%m%dT%H%M%SZ')}-{s['direction']}"
                 record = {
-                    "setup_id":          setup_id,
-                    "timestamp":         ts_str,
-                    "symbol":            sym,
-                    "direction":         s["direction"],
-                    "entry":             s["entry"],
-                    "stop":              s["stop"],
-                    "target":            s["target"],
-                    "rr_planned":        s["rr"],
-                    "tf_biases":         results_by_symbol[sym]["tf_biases"],
-                    "volume_signal":     results_by_symbol[sym]["volume_signal"],
-                    "status":            "active",
-                    "result":            None,
-                    "result_price":      None,
-                    "result_timestamp":  None,
-                    "duration_minutes":  None,
-                    "actual_rr":         None,
+                    "setup_id":              setup_id,
+                    "timestamp":             ts_str,
+                    "symbol":                sym,
+                    "direction":             s["direction"],
+                    "entry":                 s["entry"],
+                    "stop":                  s["stop"],
+                    "target":                s["target"],
+                    "rr_planned":            s["rr"],
+                    "risk_pct":              s.get("risk_pct"),
+                    "reward_pct":            s.get("reward_pct"),
+                    "position_size_dollars": s.get("position_size_dollars"),
+                    "position_size_coins":   s.get("position_size_coins"),
+                    "trigger_reasons":       s.get("trigger_reasons", []),
+                    "invalidation":          s.get("invalidation", ""),
+                    "tf_biases":             results_by_symbol[sym]["tf_biases"],
+                    "volume_signal":         results_by_symbol[sym]["volume_signal"],
+                    "status":                "active",
+                    "result":                None,
+                    "result_price":          None,
+                    "result_timestamp":      None,
+                    "duration_minutes":      None,
+                    "actual_rr":             None,
                 }
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
                 new_count += 1
@@ -446,14 +488,28 @@ def main():
     setup_total_suffix_tg = f" | {total_setup_count} SETUP" if total_setup_count else ""
     tg_lines += ["", f"<b>Genel: {', '.join(total_parts)}{setup_total_suffix_tg}</b>"]
 
-    if all_setups:
-        tg_lines.append(f"\n<b>AKTİF SETUPLAR ({total_setup_count})</b>")
-        for sym, s in all_setups:
-            tg_lines.append(
-                f"{sym} {s['direction']}  entry {fmt_price(sym, s['entry'])}  R:R {s['rr']}:1"
-            )
+    snapshot_msg = "\n".join(tg_lines)
 
-    telegram_send_long("\n".join(tg_lines))
+    if all_setups:
+        # Sort by R:R descending, build detail blocks
+        sorted_setups = sorted(all_setups, key=lambda x: x[1]["rr"], reverse=True)
+        blocks = [format_setup_block(sym, s) for sym, s in sorted_setups]
+
+        full_msg = snapshot_msg + "\n\n" + "\n\n".join(blocks)
+        if len(full_msg) <= 4000:
+            telegram_send_long(full_msg)
+        else:
+            # Send snapshot first, then setup blocks (top 3 full + rest short)
+            telegram_send_long(snapshot_msg)
+            top3 = blocks[:3]
+            rest = sorted_setups[3:]
+            detail_msg = "\n\n".join(top3)
+            if rest:
+                short = ", ".join(f"{sym} {s['direction']} (R:R {s['rr']})" for sym, s in rest)
+                detail_msg += f"\n\nAyrıca: {short}"
+            telegram_send_long(detail_msg)
+    else:
+        telegram_send_long(snapshot_msg)
 
     # ── Build dashboard ───────────────────────────────────────────────────────
     print("[Dashboard] Oluşturuluyor...")
