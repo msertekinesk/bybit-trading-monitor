@@ -192,18 +192,20 @@ def main():
             f'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>'
             f'</svg></button>' if has_spark else ""
         )
-        canvas = (f'<canvas id="spark-{sym}" style="height:30px;width:100%;display:block;margin-top:4px"></canvas>'
-                  if has_spark else
-                  '<div style="height:30px;display:flex;align-items:center;justify-content:center;'
-                  'color:#1e2530;font-size:0.6em;margin-top:4px">—</div>')
+        spark_div = (f'<div style="height:30px;position:relative;margin-top:4px">'
+                     f'<canvas id="spark-{sym}"></canvas></div>'
+                     if has_spark else
+                     '<div style="height:30px;display:flex;align-items:center;justify-content:center;'
+                     'color:#1e2530;font-size:0.6em;margin-top:4px">—</div>')
         return (f'<div class="card-hover fade-in" '
-                f'style="background:#161b22;border:1px solid #21262d;border-left:3px solid {border_col};'
-                f'border-radius:6px;padding:6px 8px;animation-delay:{delay:.2f}s;position:relative;cursor:default">'
+                f'style="height:80px;overflow:hidden;background:#161b22;border:1px solid #21262d;'
+                f'border-left:3px solid {border_col};border-radius:6px;padding:6px 8px;'
+                f'animation-delay:{delay:.2f}s;position:relative;cursor:default">'
                 f'{expand_btn}'
                 f'<div style="display:flex;justify-content:space-between;align-items:baseline;padding-right:{12 if has_spark else 0}px">'
                 f'<span style="font-weight:700;color:#e6edf3;font-size:0.78em">{coin(sym)}</span>'
                 f'<span style="color:{pct_col};font-size:0.72em;font-weight:600">{pct_str}</span>'
-                f'</div>{canvas}</div>')
+                f'</div>{spark_div}</div>')
 
     mover_cards = ""
     for i, sym in enumerate(ALL_SYMBOLS):
