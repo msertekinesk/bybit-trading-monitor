@@ -53,8 +53,8 @@
   <!-- TOP MOVERS SPARKLINE -->
   <div class="panel fade-in" style="animation-delay:0.1s">
     <div class="stitle">Top Movers (24h)</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px">
-      <div class="card-hover fade-in" style="background:#161b22;border:1px solid #10b98133;border-radius:10px;padding:16px;animation-delay:0.00s"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:700;color:#e6edf3">ETH</div><div style="color:#64748b;font-size:0.78em;margin-top:2px">$2077.86</div></div><div style="color:#10b981;font-size:1.1em;font-weight:700">+0.87%</div></div><canvas id="spark-ETHUSDT" data-winner="true" style="height:56px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #10b98133;border-radius:10px;padding:16px;animation-delay:0.05s"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:700;color:#e6edf3">TON</div><div style="color:#64748b;font-size:0.78em;margin-top:2px">$1.9500</div></div><div style="color:#10b981;font-size:1.1em;font-weight:700">+0.67%</div></div><canvas id="spark-TONUSDT" data-winner="true" style="height:56px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #10b98133;border-radius:10px;padding:16px;animation-delay:0.10s"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:700;color:#e6edf3">BTC</div><div style="color:#64748b;font-size:0.78em;margin-top:2px">$75,965.38</div></div><div style="color:#10b981;font-size:1.1em;font-weight:700">+0.40%</div></div><canvas id="spark-BTCUSDT" data-winner="true" style="height:56px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #ef444433;border-radius:10px;padding:16px;animation-delay:0.15s"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:700;color:#e6edf3">NEAR</div><div style="color:#64748b;font-size:0.78em;margin-top:2px">$2.5620</div></div><div style="color:#ef4444;font-size:1.1em;font-weight:700">-10.26%</div></div><canvas id="spark-NEARUSDT" data-winner="false" style="height:56px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #ef444433;border-radius:10px;padding:16px;animation-delay:0.20s"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:700;color:#e6edf3">SUI</div><div style="color:#64748b;font-size:0.78em;margin-top:2px">$1.0043</div></div><div style="color:#ef4444;font-size:1.1em;font-weight:700">-3.67%</div></div><canvas id="spark-SUIUSDT" data-winner="false" style="height:56px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #ef444433;border-radius:10px;padding:16px;animation-delay:0.25s"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div style="font-weight:700;color:#e6edf3">DOT</div><div style="color:#64748b;font-size:0.78em;margin-top:2px">$1.2560</div></div><div style="color:#ef4444;font-size:1.1em;font-weight:700">-2.86%</div></div><canvas id="spark-DOTUSDT" data-winner="false" style="height:56px;width:100%;margin-top:8px"></canvas></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="card-hover fade-in" style="background:#161b22;border:1px solid #10b98133;border-radius:10px;padding:14px;animation-delay:0.00s;position:relative"><button onclick="openModal('ETHUSDT')" title="Büyüt" style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button><div style="display:flex;justify-content:space-between;align-items:flex-start;padding-right:28px"><div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">ETH</div><div style="color:#64748b;font-size:0.75em;margin-top:2px">$2077.86</div></div><div style="color:#10b981;font-size:1em;font-weight:700">+0.87%</div></div><canvas id="spark-ETHUSDT" style="height:75px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #10b98133;border-radius:10px;padding:14px;animation-delay:0.05s;position:relative"><button onclick="openModal('TONUSDT')" title="Büyüt" style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button><div style="display:flex;justify-content:space-between;align-items:flex-start;padding-right:28px"><div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">TON</div><div style="color:#64748b;font-size:0.75em;margin-top:2px">$1.9500</div></div><div style="color:#10b981;font-size:1em;font-weight:700">+0.67%</div></div><canvas id="spark-TONUSDT" style="height:75px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #10b98133;border-radius:10px;padding:14px;animation-delay:0.10s;position:relative"><button onclick="openModal('BTCUSDT')" title="Büyüt" style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button><div style="display:flex;justify-content:space-between;align-items:flex-start;padding-right:28px"><div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">BTC</div><div style="color:#64748b;font-size:0.75em;margin-top:2px">$75,965.38</div></div><div style="color:#10b981;font-size:1em;font-weight:700">+0.40%</div></div><canvas id="spark-BTCUSDT" style="height:75px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #ef444433;border-radius:10px;padding:14px;animation-delay:0.15s;position:relative"><button onclick="openModal('NEARUSDT')" title="Büyüt" style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button><div style="display:flex;justify-content:space-between;align-items:flex-start;padding-right:28px"><div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">NEAR</div><div style="color:#64748b;font-size:0.75em;margin-top:2px">$2.5620</div></div><div style="color:#ef4444;font-size:1em;font-weight:700">-10.26%</div></div><canvas id="spark-NEARUSDT" style="height:75px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #ef444433;border-radius:10px;padding:14px;animation-delay:0.20s;position:relative"><button onclick="openModal('SUIUSDT')" title="Büyüt" style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button><div style="display:flex;justify-content:space-between;align-items:flex-start;padding-right:28px"><div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">SUI</div><div style="color:#64748b;font-size:0.75em;margin-top:2px">$1.0043</div></div><div style="color:#ef4444;font-size:1em;font-weight:700">-3.67%</div></div><canvas id="spark-SUIUSDT" style="height:75px;width:100%;margin-top:8px"></canvas></div><div class="card-hover fade-in" style="background:#161b22;border:1px solid #ef444433;border-radius:10px;padding:14px;animation-delay:0.25s;position:relative"><button onclick="openModal('DOTUSDT')" title="Büyüt" style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button><div style="display:flex;justify-content:space-between;align-items:flex-start;padding-right:28px"><div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">DOT</div><div style="color:#64748b;font-size:0.75em;margin-top:2px">$1.2560</div></div><div style="color:#ef4444;font-size:1em;font-weight:700">-2.86%</div></div><canvas id="spark-DOTUSDT" style="height:75px;width:100%;margin-top:8px"></canvas></div>
     </div>
   </div>
 
@@ -111,6 +111,15 @@
     <p style="color:#374151;font-style:italic">Henüz setup verisi yok. İlk setup tetiklendiğinde grafik burada görünecek.</p>
   </div>
 
+  <!-- CHART MODAL -->
+  <div id="chart-modal" onclick="closeModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;padding:20px">
+    <div onclick="event.stopPropagation()" style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:24px;width:min(820px,95vw);position:relative">
+      <button onclick="closeModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#8b949e;font-size:1.4em;cursor:pointer;line-height:1">&#x00D7;</button>
+      <div id="modal-sym" style="font-size:1em;font-weight:700;color:#e6edf3;margin-bottom:16px"></div>
+      <div style="height:340px;position:relative"><canvas id="modal-canvas"></canvas></div>
+    </div>
+  </div>
+
   <!-- FOOTER -->
   <div style="text-align:center;color:#374151;font-size:0.75em;padding:20px 0">
     Auto-generated by GitHub Actions &middot; Updated hourly
@@ -119,12 +128,11 @@
   <script>
     
     // Sparklines
-    const sparkData = {"ETHUSDT": {"labels": ["11:57", "12:37", "13:18", "16:48", "17:16", "17:37", "17:43", "17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [2060.0, 2096.66, 2119.37, 2122.68, 2132.07, 2122.9, 2112.38, 2116.71, 2068.15, 2068.03, 2068.23, 2074.61, 2076.61, 2075.88, 2076.02, 2075.54, 2068.79, 2077.86]}, "TONUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [1.937, 1.953, 1.997, 1.992, 2.039, 2.047, 2.044, 2.05, 1.96, 1.966, 1.95]}, "BTCUSDT": {"labels": ["11:52", "11:57", "12:37", "13:18", "16:48", "17:16", "17:37", "17:43", "17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [75659.1, 75451.2, 76688.0, 76774.1, 77175.5, 77455.9, 77271.2, 76847.8, 77136.97, 75930.01, 75855.47, 75870.34, 76023.76, 76080.01, 76086.57, 76074.0, 76057.34, 75749.02, 75965.38]}, "NEARUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [2.855, 2.603, 2.616, 2.617, 2.647, 2.65, 2.654, 2.655, 2.64, 2.639, 2.562]}, "SUIUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [1.0426, 1.0095, 1.0076, 1.0052, 1.0092, 1.0113, 1.0088, 1.0082, 1.0055, 1.001, 1.0043]}, "DOTUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [1.293, 1.246, 1.241, 1.24, 1.25, 1.253, 1.251, 1.251, 1.253, 1.249, 1.256]}};
+    const sparkData = {"ETHUSDT": {"labels": ["11:57", "12:37", "13:18", "16:48", "17:16", "17:37", "17:43", "17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [2060.0, 2096.66, 2119.37, 2122.68, 2132.07, 2122.9, 2112.38, 2116.71, 2068.15, 2068.03, 2068.23, 2074.61, 2076.61, 2075.88, 2076.02, 2075.54, 2068.79, 2077.86], "isWinner": true}, "TONUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [1.937, 1.953, 1.997, 1.992, 2.039, 2.047, 2.044, 2.05, 1.96, 1.966, 1.95], "isWinner": true}, "BTCUSDT": {"labels": ["11:52", "11:57", "12:37", "13:18", "16:48", "17:16", "17:37", "17:43", "17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [75659.1, 75451.2, 76688.0, 76774.1, 77175.5, 77455.9, 77271.2, 76847.8, 77136.97, 75930.01, 75855.47, 75870.34, 76023.76, 76080.01, 76086.57, 76074.0, 76057.34, 75749.02, 75965.38], "isWinner": true}, "NEARUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [2.855, 2.603, 2.616, 2.617, 2.647, 2.65, 2.654, 2.655, 2.64, 2.639, 2.562], "isWinner": false}, "SUIUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [1.0426, 1.0095, 1.0076, 1.0052, 1.0092, 1.0113, 1.0088, 1.0082, 1.0055, 1.001, 1.0043], "isWinner": false}, "DOTUSDT": {"labels": ["17:51", "21:44", "22:17", "22:22", "22:48", "22:53", "22:55", "22:56", "00:27", "01:59", "03:06"], "prices": [1.293, 1.246, 1.241, 1.24, 1.25, 1.253, 1.251, 1.251, 1.253, 1.249, 1.256], "isWinner": false}};
     Object.entries(sparkData).forEach(([sym, d]) => {
       const el = document.getElementById('spark-' + sym);
       if (!el) return;
-      const isWinner = el.dataset.winner === 'true';
-      const col = isWinner ? '#10b981' : '#ef4444';
+      const col = d.isWinner ? '#10b981' : '#ef4444';
       new Chart(el, {
         type: 'line',
         data: {
@@ -140,6 +148,45 @@
         }
       });
     });
+
+    // Modal
+    let modalChart = null;
+    function openModal(sym) {
+      const d = sparkData[sym]; if (!d) return;
+      document.getElementById('chart-modal').style.display = 'flex';
+      document.getElementById('modal-sym').textContent = sym.replace('USDT','') + ' — 24h Fiyat';
+      if (modalChart) { modalChart.destroy(); modalChart = null; }
+      const col = d.isWinner ? '#10b981' : '#ef4444';
+      modalChart = new Chart(document.getElementById('modal-canvas'), {
+        type: 'line',
+        data: {
+          labels: d.labels,
+          datasets: [{ data: d.prices, borderColor: col, borderWidth: 2,
+                        pointRadius: 0, fill: true, backgroundColor: col + '18', tension: 0.4 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: 'index', intersect: false,
+              backgroundColor: '#1e2530', borderColor: '#30363d', borderWidth: 1,
+              titleColor: '#8b949e', bodyColor: '#e6edf3'
+            }
+          },
+          scales: {
+            x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e2530' } },
+            y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e2530' } }
+          },
+          animation: { duration: 400 }
+        }
+      });
+    }
+    function closeModal() {
+      document.getElementById('chart-modal').style.display = 'none';
+      if (modalChart) { modalChart.destroy(); modalChart = null; }
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
     // Doughnut
     const dData = {"total": 0, "wins": 0, "losses": 0, "timeouts": 0, "active": 0};

@@ -177,22 +177,33 @@ def main():
             sparkline_data[sym] = {
                 "labels": [parse_ts(r["timestamp"]).astimezone(TZ_LOCAL).strftime("%H:%M") for r in recent],
                 "prices": [round(r.get("price", 0), 6) for r in recent],
+                "isWinner": sym in winners_syms,
             }
 
     def mover_card(sym, pct, is_winner, delay):
-        col    = "#10b981" if is_winner else "#ef4444"
-        p_str  = escape(fmt_price(sym, latest.get(sym, {}).get("price", 0)))
-        canvas = (f'<canvas id="spark-{sym}" data-winner="{"true" if is_winner else "false"}"'
-                  f' style="height:56px;width:100%;margin-top:8px"></canvas>'
-                  if sym in sparkline_data
-                  else '<div style="height:56px;display:flex;align-items:center;justify-content:center;'
-                       'color:#374151;font-size:0.72em;margin-top:8px">veri yetersiz</div>')
+        col       = "#10b981" if is_winner else "#ef4444"
+        p_str     = escape(fmt_price(sym, latest.get(sym, {}).get("price", 0)))
+        has_spark = sym in sparkline_data
+        expand_btn = (
+            f'<button onclick="openModal(\'{sym}\')" title="Büyüt" '
+            f'style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;'
+            f'border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1">'
+            f'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
+            f'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>'
+            f'</svg></button>' if has_spark else ""
+        )
+        canvas = (f'<canvas id="spark-{sym}" style="height:75px;width:100%;margin-top:8px"></canvas>'
+                  if has_spark else
+                  '<div style="height:75px;display:flex;align-items:center;justify-content:center;'
+                  'color:#374151;font-size:0.72em;margin-top:8px">veri yetersiz</div>')
+        pr = "padding-right:28px" if has_spark else ""
         return (f'<div class="card-hover fade-in" style="background:#161b22;border:1px solid {col}33;'
-                f'border-radius:10px;padding:16px;animation-delay:{delay:.2f}s">'
-                f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
-                f'<div><div style="font-weight:700;color:#e6edf3">{coin(sym)}</div>'
-                f'<div style="color:#64748b;font-size:0.78em;margin-top:2px">{p_str}</div></div>'
-                f'<div style="color:{col};font-size:1.1em;font-weight:700">{pct:+.2f}%</div>'
+                f'border-radius:10px;padding:14px;animation-delay:{delay:.2f}s;position:relative">'
+                f'{expand_btn}'
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;{pr}">'
+                f'<div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">{coin(sym)}</div>'
+                f'<div style="color:#64748b;font-size:0.75em;margin-top:2px">{p_str}</div></div>'
+                f'<div style="color:{col};font-size:1em;font-weight:700">{pct:+.2f}%</div>'
                 f'</div>{canvas}</div>')
 
     mover_cards = ""
@@ -340,8 +351,7 @@ def main():
     Object.entries(sparkData).forEach(([sym, d]) => {{
       const el = document.getElementById('spark-' + sym);
       if (!el) return;
-      const isWinner = el.dataset.winner === 'true';
-      const col = isWinner ? '#10b981' : '#ef4444';
+      const col = d.isWinner ? '#10b981' : '#ef4444';
       new Chart(el, {{
         type: 'line',
         data: {{
@@ -357,6 +367,45 @@ def main():
         }}
       }});
     }});
+
+    // Modal
+    let modalChart = null;
+    function openModal(sym) {{
+      const d = sparkData[sym]; if (!d) return;
+      document.getElementById('chart-modal').style.display = 'flex';
+      document.getElementById('modal-sym').textContent = sym.replace('USDT','') + ' — 24h Fiyat';
+      if (modalChart) {{ modalChart.destroy(); modalChart = null; }}
+      const col = d.isWinner ? '#10b981' : '#ef4444';
+      modalChart = new Chart(document.getElementById('modal-canvas'), {{
+        type: 'line',
+        data: {{
+          labels: d.labels,
+          datasets: [{{ data: d.prices, borderColor: col, borderWidth: 2,
+                        pointRadius: 0, fill: true, backgroundColor: col + '18', tension: 0.4 }}]
+        }},
+        options: {{
+          responsive: true, maintainAspectRatio: false,
+          plugins: {{
+            legend: {{ display: false }},
+            tooltip: {{
+              mode: 'index', intersect: false,
+              backgroundColor: '#1e2530', borderColor: '#30363d', borderWidth: 1,
+              titleColor: '#8b949e', bodyColor: '#e6edf3'
+            }}
+          }},
+          scales: {{
+            x: {{ ticks: {{ color: '#64748b', font: {{ size: 10 }} }}, grid: {{ color: '#1e2530' }} }},
+            y: {{ ticks: {{ color: '#64748b', font: {{ size: 10 }} }}, grid: {{ color: '#1e2530' }} }}
+          }},
+          animation: {{ duration: 400 }}
+        }}
+      }});
+    }}
+    function closeModal() {{
+      document.getElementById('chart-modal').style.display = 'none';
+      if (modalChart) {{ modalChart.destroy(); modalChart = null; }}
+    }}
+    document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closeModal(); }});
 
     // Doughnut
     const dData = {doughnut_json};
@@ -449,7 +498,7 @@ def main():
   <!-- TOP MOVERS SPARKLINE -->
   <div class="panel fade-in" style="animation-delay:0.1s">
     <div class="stitle">Top Movers (24h)</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       {mover_cards if (winners_syms or losers_syms) else '<p style="color:#374151;font-style:italic">24h verisi yetersiz.</p>'}
     </div>
   </div>
@@ -499,6 +548,15 @@ def main():
   <div class="panel fade-in" style="animation-delay:0.3s">
     <div class="stitle">Performans Özeti</div>
     {perf_html}
+  </div>
+
+  <!-- CHART MODAL -->
+  <div id="chart-modal" onclick="closeModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;padding:20px">
+    <div onclick="event.stopPropagation()" style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:24px;width:min(820px,95vw);position:relative">
+      <button onclick="closeModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#8b949e;font-size:1.4em;cursor:pointer;line-height:1">&#x00D7;</button>
+      <div id="modal-sym" style="font-size:1em;font-weight:700;color:#e6edf3;margin-bottom:16px"></div>
+      <div style="height:340px;position:relative"><canvas id="modal-canvas"></canvas></div>
+    </div>
   </div>
 
   <!-- FOOTER -->
