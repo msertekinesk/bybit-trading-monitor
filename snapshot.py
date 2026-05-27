@@ -27,12 +27,19 @@ WATCHLIST_BY_CATEGORY = {
     "LEGACY":   ["LTCUSDT"],
 }
 
-WATCHLIST = [coin for coins in WATCHLIST_BY_CATEGORY.values() for coin in coins]
+WATCHLIST  = [coin for coins in WATCHLIST_BY_CATEGORY.values() for coin in coins]
 TIMEFRAMES = ["15m", "1h", "4h"]
 
 DECISIONS_FILE = os.path.join(os.path.dirname(__file__), "decisions.jsonl")
 SETUPS_FILE    = os.path.join(os.path.dirname(__file__), "setups.jsonl")
 TZ_LOCAL = timezone(timedelta(hours=3))
+
+SETUP_EMOJI = {
+    "STRONG_TREND": "🔥",
+    "WEAK_TREND":   "⚡",
+    "REVERSAL":     "🔄",
+    "BREAKOUT":     "🚀",
+}
 
 # ── Signing helper (private endpoints) ───────────────────────────────────────
 def _sign(params: dict) -> dict:
@@ -99,10 +106,10 @@ def consensus_bias(tf_biases: dict) -> str:
     biases = list(tf_biases.values())
     bull = biases.count("bullish")
     bear = biases.count("bearish")
-    if bull == 3:   return "STRONG BULLISH"
-    if bear == 3:   return "STRONG BEARISH"
-    if bull == 2:   return "BULLISH"
-    if bear == 2:   return "BEARISH"
+    if bull == 3:  return "STRONG BULLISH"
+    if bear == 3:  return "STRONG BEARISH"
+    if bull == 2:  return "BULLISH"
+    if bear == 2:  return "BEARISH"
     return "MIXED"
 
 
@@ -115,69 +122,7 @@ def volume_signal(df: pd.DataFrame) -> str:
     return "NORMAL VOL"
 
 
-def detect_setup(symbol, price, tf_biases, consensus, volume_signal_str, df_15m, rsi_15m=0.0):
-    if consensus not in ("STRONG BULLISH", "STRONG BEARISH"):
-        return None
-    if volume_signal_str == "LOW VOL":
-        return None
-
-    last_20_low  = df_15m["low"].iloc[-20:].min()
-    last_20_high = df_15m["high"].iloc[-20:].max()
-
-    if consensus == "STRONG BULLISH":
-        direction = "LONG"
-        entry  = price
-        stop   = last_20_low * 0.998
-        target = df_15m["high"].iloc[-50:].quantile(0.75)
-        risk   = entry - stop
-        reward = target - entry
-        key_level = last_20_low
-        inv_dir   = "altına"
-    else:
-        direction = "SHORT"
-        entry  = price
-        stop   = last_20_high * 1.002
-        target = df_15m["low"].iloc[-50:].quantile(0.25)
-        risk   = stop - entry
-        reward = entry - target
-        key_level = last_20_high
-        inv_dir   = "üstüne"
-
-    if risk <= 0 or reward <= 0:
-        return None
-    rr = reward / risk
-    if rr < 1.5:
-        return None
-
-    risk_pct   = (risk / entry) * 100
-    reward_pct = (reward / entry) * 100
-    pos_dollars = round(10 / (risk_pct / 100), 2)  # $10 risk on $1000 account
-    pos_coins   = round(pos_dollars / entry, 6)
-
-    return {
-        "direction":             direction,
-        "entry":                 round(entry, 6),
-        "stop":                  round(stop, 6),
-        "target":                round(target, 6),
-        "rr":                    round(rr, 2),
-        "risk_pct":              round(risk_pct, 4),
-        "reward_pct":            round(reward_pct, 4),
-        "position_size_dollars": pos_dollars,
-        "position_size_coins":   pos_coins,
-        "trigger_reasons": [
-            f"3/3 {consensus}",
-            f"Volume {volume_signal_str}",
-            f"RSI(15m) {rsi_15m:.1f}",
-        ],
-        "invalidation": f"Fiyat {round(stop, 6)} {inv_dir} 4H kapanış",
-        "reasoning": (
-            f"{consensus} ({tf_biases}), volume {volume_signal_str}, "
-            f"key level {round(key_level, 6)}"
-        ),
-    }
-
-
-# ── Volume Profile ───────────────────────────────────────────────────────────
+# ── Volume Profile ────────────────────────────────────────────────────────────
 def calculate_volume_profile(df, num_bins=40):
     price_min = float(df["low"].min())
     price_max = float(df["high"].max())
@@ -218,11 +163,11 @@ def calculate_volume_profile(df, num_bins=40):
 def detect_liquidity_sweep(df, lookback=20):
     if len(df) < lookback + 3:
         return {"detected": False}
-    recent    = df.iloc[-(lookback + 3):-3]
-    swing_hi  = float(recent["high"].max())
-    swing_lo  = float(recent["low"].min())
-    last_3    = df.iloc[-3:]
-    avg_vol   = float(df["volume"].iloc[-23:-3].mean()) if len(df) >= 23 else float(df["volume"].mean())
+    recent   = df.iloc[-(lookback + 3):-3]
+    swing_hi = float(recent["high"].max())
+    swing_lo = float(recent["low"].min())
+    last_3   = df.iloc[-3:]
+    avg_vol  = float(df["volume"].iloc[-23:-3].mean()) if len(df) >= 23 else float(df["volume"].mean())
     if avg_vol == 0:
         return {"detected": False}
     for _, row in last_3.iterrows():
@@ -230,19 +175,304 @@ def detect_liquidity_sweep(df, lookback=20):
         span = hi - lo
         if span <= 0:
             continue
-        # Bullish sweep: wick below swing low, close back above
         if lo < swing_lo and cl > swing_lo and vol >= avg_vol * 1.3:
             rej = (cl - lo) / span
             if rej > 0.5:
                 return {"detected": True, "type": "bullish_sweep",
                         "sweep_level": round(swing_lo, 6), "rejection_strength": round(rej, 2)}
-        # Bearish sweep: wick above swing high, close back below
         if hi > swing_hi and cl < swing_hi and vol >= avg_vol * 1.3:
             rej = (hi - cl) / span
             if rej > 0.5:
                 return {"detected": True, "type": "bearish_sweep",
                         "sweep_level": round(swing_hi, 6), "rejection_strength": round(rej, 2)}
     return {"detected": False}
+
+
+# ── Setup Helpers ─────────────────────────────────────────────────────────────
+def compute_rr(entry, stop, target, direction):
+    if direction == "LONG":
+        risk   = entry - stop
+        reward = target - entry
+    else:
+        risk   = stop - entry
+        reward = entry - target
+    if risk <= 0 or reward <= 0:
+        return 0.0
+    return reward / risk
+
+
+def build_setup_dict(type_, direction, entry, stop, target, rr,
+                     tf_biases, volume_signal_str, reasons, confidence):
+    risk_pct   = abs(entry - stop) / entry * 100
+    reward_pct = abs(target - entry) / entry * 100
+    pos_dollars = round(10.0 / (risk_pct / 100), 2) if risk_pct > 0 else 0
+    pos_coins   = round(pos_dollars / entry, 6) if entry > 0 else 0
+    inv_dir = "altına" if direction == "LONG" else "üstüne"
+    return {
+        "type":                  type_,
+        "direction":             direction,
+        "entry":                 round(entry, 6),
+        "stop":                  round(stop, 6),
+        "target":                round(target, 6),
+        "rr":                    round(rr, 2),
+        "risk_pct":              round(risk_pct, 4),
+        "reward_pct":            round(reward_pct, 4),
+        "position_size_dollars": pos_dollars,
+        "position_size_coins":   pos_coins,
+        "tf_biases":             tf_biases,
+        "volume_signal":         volume_signal_str,
+        "trigger_reasons":       reasons,
+        "confidence":            confidence,
+        "invalidation":          f"Fiyat {round(stop, 6)} {inv_dir} 4H kapanış",
+    }
+
+
+# ── Setup Detection ───────────────────────────────────────────────────────────
+def detect_strong_trend_setup(symbol, price, tf_biases, consensus,
+                               volume_signal_str, klines_15m, liquidity_sweep):
+    if consensus not in ("STRONG BULLISH", "STRONG BEARISH"):
+        return None
+    if volume_signal_str == "LOW VOL":
+        return None
+
+    last_20_low  = float(klines_15m["low"].iloc[-20:].min())
+    last_20_high = float(klines_15m["high"].iloc[-20:].max())
+
+    if consensus == "STRONG BULLISH":
+        direction = "LONG"
+        entry  = price
+        stop   = last_20_low * 0.998
+        target = float(klines_15m["high"].iloc[-50:].quantile(0.75))
+    else:
+        direction = "SHORT"
+        entry  = price
+        stop   = last_20_high * 1.002
+        target = float(klines_15m["low"].iloc[-50:].quantile(0.25))
+
+    rr = compute_rr(entry, stop, target, direction)
+    if rr < 1.5:
+        return None
+
+    reasons = [f"3/3 {consensus}", f"Volume {volume_signal_str}"]
+    expected_sweep = "bullish_sweep" if direction == "LONG" else "bearish_sweep"
+    if liquidity_sweep.get("detected") and liquidity_sweep.get("type") == expected_sweep:
+        reasons.append(f"Liquidity sweep ({liquidity_sweep['type']})")
+
+    return build_setup_dict(
+        type_="STRONG_TREND", direction=direction,
+        entry=entry, stop=stop, target=target, rr=rr,
+        tf_biases=tf_biases, volume_signal_str=volume_signal_str,
+        reasons=reasons, confidence="HIGH",
+    )
+
+
+def detect_weak_trend_setup(symbol, price, tf_biases, consensus,
+                             volume_signal_str, klines_15m, liquidity_sweep):
+    if consensus not in ("BULLISH", "BEARISH"):
+        return None
+    if volume_signal_str == "LOW VOL":
+        return None
+
+    last_15_low  = float(klines_15m["low"].iloc[-15:].min())
+    last_15_high = float(klines_15m["high"].iloc[-15:].max())
+
+    if consensus == "BULLISH":
+        direction = "LONG"
+        entry  = price
+        stop   = last_15_low * 0.997
+        target = float(klines_15m["high"].iloc[-40:].quantile(0.70))
+    else:
+        direction = "SHORT"
+        entry  = price
+        stop   = last_15_high * 1.003
+        target = float(klines_15m["low"].iloc[-40:].quantile(0.30))
+
+    rr = compute_rr(entry, stop, target, direction)
+    if rr < 1.3:
+        return None
+
+    same_dir = [tf for tf, bias in tf_biases.items()
+                if bias == ("bullish" if direction == "LONG" else "bearish")]
+    reasons = [
+        f"2/3 {consensus} ({', '.join(same_dir)} aligned)",
+        f"Volume {volume_signal_str}",
+    ]
+    return build_setup_dict(
+        type_="WEAK_TREND", direction=direction,
+        entry=entry, stop=stop, target=target, rr=rr,
+        tf_biases=tf_biases, volume_signal_str=volume_signal_str,
+        reasons=reasons, confidence="MEDIUM",
+    )
+
+
+def detect_reversal_setup(symbol, price, rsi, tf_biases,
+                           volume_signal_str, klines_15m, liquidity_sweep):
+    if volume_signal_str == "LOW VOL":
+        return None
+    if not liquidity_sweep.get("detected"):
+        return None
+
+    sweep_type = liquidity_sweep.get("type")
+    rejection  = liquidity_sweep.get("rejection_strength", 0)
+    if rejection < 0.6:
+        return None
+
+    last_20_low  = float(klines_15m["low"].iloc[-20:].min())
+    last_20_high = float(klines_15m["high"].iloc[-20:].max())
+    range_size   = last_20_high - last_20_low
+
+    if rsi <= 35 and sweep_type == "bullish_sweep":
+        direction = "LONG"
+        entry     = price
+        stop      = liquidity_sweep["sweep_level"] * 0.997
+        target    = (last_20_low + last_20_high) / 2 + range_size * 0.3
+        rsi_label = "oversold"
+    elif rsi >= 65 and sweep_type == "bearish_sweep":
+        direction = "SHORT"
+        entry     = price
+        stop      = liquidity_sweep["sweep_level"] * 1.003
+        target    = (last_20_low + last_20_high) / 2 - range_size * 0.3
+        rsi_label = "overbought"
+    else:
+        return None
+
+    rr = compute_rr(entry, stop, target, direction)
+    if rr < 1.5:
+        return None
+
+    reasons = [
+        f"RSI {rsi:.1f} ({rsi_label})",
+        f"Liquidity sweep ({sweep_type})",
+        f"Rejection strength {rejection:.0%}",
+        f"Volume {volume_signal_str}",
+    ]
+    return build_setup_dict(
+        type_="REVERSAL", direction=direction,
+        entry=entry, stop=stop, target=target, rr=rr,
+        tf_biases=tf_biases, volume_signal_str=volume_signal_str,
+        reasons=reasons, confidence="MEDIUM",
+    )
+
+
+def detect_pullback_setup(symbol, price, tf_biases, volume_signal_str, klines_15m, klines_4h):
+    if volume_signal_str == "LOW VOL":
+        return None
+
+    bias_4h  = tf_biases.get("4h", "neutral")
+    bias_1h  = tf_biases.get("1h", "neutral")
+    bias_15m = tf_biases.get("15m", "neutral")
+
+    if bias_4h not in ("bullish", "bearish"):
+        return None
+    if bias_4h != bias_1h:
+        return None
+    if bias_15m == bias_4h:
+        return None
+
+    main_trend   = bias_4h
+    last_20_low  = float(klines_15m["low"].iloc[-20:].min())
+    last_20_high = float(klines_15m["high"].iloc[-20:].max())
+    last_50_high = float(klines_15m["high"].iloc[-50:].max())
+    last_50_low  = float(klines_15m["low"].iloc[-50:].min())
+
+    if main_trend == "bullish":
+        if price > last_20_low * 1.015:
+            return None
+        direction = "LONG"
+        entry  = price
+        stop   = last_20_low * 0.997
+        target = last_50_high
+        tf_label = "düzeltme"
+    else:
+        if price < last_20_high * 0.985:
+            return None
+        direction = "SHORT"
+        entry  = price
+        stop   = last_20_high * 1.003
+        target = last_50_low
+        tf_label = "bounce"
+
+    rr = compute_rr(entry, stop, target, direction)
+    if rr < 1.5:
+        return None
+
+    reasons = [
+        f"4H/1H {main_trend} (ana trend)",
+        f"15m {tf_label}",
+        f"Volume {volume_signal_str}",
+    ]
+    return build_setup_dict(
+        type_="PULLBACK", direction=direction,
+        entry=entry, stop=stop, target=target, rr=rr,
+        tf_biases=tf_biases, volume_signal_str=volume_signal_str,
+        reasons=reasons, confidence="MEDIUM",
+    )
+
+
+def detect_breakout_setup(symbol, price, tf_biases, volume_signal_str, klines_15m):
+    if volume_signal_str != "HIGH VOL":
+        return None
+    if len(klines_15m) < 22:
+        return None
+
+    last_20      = klines_15m.iloc[-21:-1]
+    last_20_high = float(last_20["high"].max())
+    last_20_low  = float(last_20["low"].min())
+    if last_20_low <= 0:
+        return None
+    range_size = (last_20_high - last_20_low) / last_20_low
+
+    if range_size > 0.025:
+        return None
+
+    lc = klines_15m.iloc[-1]
+    lc_open  = float(lc["open"])
+    lc_close = float(lc["close"])
+
+    if lc_close > last_20_high and lc_close > lc_open:
+        direction = "LONG"
+        entry  = price
+        stop   = last_20_low * 0.997
+        target = last_20_high + (last_20_high - last_20_low)
+    elif lc_close < last_20_low and lc_close < lc_open:
+        direction = "SHORT"
+        entry  = price
+        stop   = last_20_high * 1.003
+        target = last_20_low - (last_20_high - last_20_low)
+    else:
+        return None
+
+    rr = compute_rr(entry, stop, target, direction)
+    if rr < 1.5:
+        return None
+
+    reasons = [
+        f"Konsolidasyon ({range_size:.1%} range)",
+        f"Range kırılımı ({'yukarı' if direction == 'LONG' else 'aşağı'})",
+        "Volume HIGH (spike)",
+    ]
+    return build_setup_dict(
+        type_="BREAKOUT", direction=direction,
+        entry=entry, stop=stop, target=target, rr=rr,
+        tf_biases=tf_biases, volume_signal_str=volume_signal_str,
+        reasons=reasons, confidence="HIGH",
+    )
+
+
+def detect_all_setups(symbol, price, rsi, tf_biases, consensus,
+                      volume_signal_str, klines_15m, klines_4h, liquidity_sweep):
+    """Priority: STRONG_TREND > BREAKOUT > REVERSAL > PULLBACK > WEAK_TREND"""
+    for fn in [
+        lambda: detect_strong_trend_setup(symbol, price, tf_biases, consensus, volume_signal_str, klines_15m, liquidity_sweep),
+        lambda: detect_breakout_setup(symbol, price, tf_biases, volume_signal_str, klines_15m),
+        lambda: detect_reversal_setup(symbol, price, rsi, tf_biases, volume_signal_str, klines_15m, liquidity_sweep),
+        lambda: detect_pullback_setup(symbol, price, tf_biases, volume_signal_str, klines_15m, klines_4h),
+        lambda: detect_weak_trend_setup(symbol, price, tf_biases, consensus, volume_signal_str, klines_15m, liquidity_sweep),
+    ]:
+        result = fn()
+        if result:
+            return result
+    return None
 
 
 # ── Formatting ────────────────────────────────────────────────────────────────
@@ -256,6 +486,13 @@ def fmt_price(symbol: str, price: float) -> str:
     if price >= 0.01:
         return f"${price:.4f}"
     return f"${price:.6f}"
+
+
+def _setup_emoji(s: dict) -> str:
+    t = s.get("type", "STRONG_TREND")
+    if t == "PULLBACK":
+        return "📉" if s["direction"] == "LONG" else "📈"
+    return SETUP_EMOJI.get(t, "")
 
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
@@ -277,18 +514,21 @@ def telegram_send(text: str) -> None:
 
 def format_setup_block(sym: str, s: dict) -> str:
     entry = s["entry"]; stop = s["stop"]; target = s["target"]; rr = s["rr"]
-    risk_a  = abs(entry - stop)
-    rew_a   = abs(target - entry)
-    risk_p  = s.get("risk_pct",  (risk_a / entry) * 100)
-    rew_p   = s.get("reward_pct", (rew_a / entry) * 100)
-    pos_d   = s.get("position_size_dollars", round(10 / (risk_p / 100), 2))
-    pos_c   = s.get("position_size_coins",   round(pos_d / entry, 6))
-    rew_d   = round(pos_d * (rew_p / 100), 2)
-    coin_lbl = sym.replace("USDT", "")
-    inv_dir  = "üstüne" if s["direction"] == "SHORT" else "altına"
+    risk_a = abs(entry - stop)
+    rew_a  = abs(target - entry)
+    risk_p = s.get("risk_pct",  (risk_a / entry) * 100)
+    rew_p  = s.get("reward_pct", (rew_a / entry) * 100)
+    pos_d  = s.get("position_size_dollars", round(10 / (risk_p / 100), 2))
+    pos_c  = s.get("position_size_coins",   round(pos_d / entry, 6))
+    rew_d  = round(pos_d * (rew_p / 100), 2)
+    coin_lbl   = sym.replace("USDT", "")
+    inv_dir    = "üstüne" if s["direction"] == "SHORT" else "altına"
+    setup_type = s.get("type", "STRONG_TREND")
+    emoji      = _setup_emoji(s)
+    confidence = s.get("confidence", "HIGH")
 
     rows = [
-        f"🚨 SETUP: <b>{sym} {s['direction']}</b>",
+        f"🚨 SETUP: <b>{sym} {s['direction']}</b> [{setup_type}] {emoji}",
         "━━━━━━━━━━━━━━━━━━━━━",
         f"Entry:   <code>{fmt_price(sym, entry)}</code>",
         f"Stop:    <code>{fmt_price(sym, stop)}</code>  (risk: {fmt_price(sym, risk_a)}, %{risk_p:.2f})",
@@ -299,6 +539,8 @@ def format_setup_block(sym: str, s: dict) -> str:
         f"  Size:   ${pos_d:,.0f} (≈ {pos_c:.4g} {coin_lbl})",
         f"  Risk:   $10.00",
         f"  Reward: ${rew_d:.2f}",
+        "",
+        f"Confidence: {confidence}",
     ]
     reasons = s.get("trigger_reasons", [])
     if reasons:
@@ -308,11 +550,9 @@ def format_setup_block(sym: str, s: dict) -> str:
 
 
 def telegram_send_long(text: str) -> None:
-    """4096 karakter aşılırsa ikiye böl."""
     if len(text) <= 4096:
         telegram_send(text)
         return
-    # Satır sınırında kes
     mid = text.rfind("\n", 0, 4000)
     if mid == -1:
         mid = 4000
@@ -338,9 +578,9 @@ def main():
             tf_rsi    = {}
 
             for tf in TIMEFRAMES:
-                df = get_klines(symbol, interval=tf, limit=200)
+                df     = get_klines(symbol, interval=tf, limit=200)
                 closes = df["close"]
-                price  = closes.iloc[-1]
+                price  = float(closes.iloc[-1])
                 ema50  = calc_ema50(closes)
                 rsi14  = calc_rsi14(closes)
                 bias   = evaluate_bias(price, ema50, rsi14)
@@ -348,56 +588,60 @@ def main():
                 tf_biases[tf] = bias
                 tf_rsi[tf]    = rsi14
 
-            consensus   = consensus_bias(tf_biases)
-            vol_signal  = volume_signal(tf_dfs["15m"])
-            df_15        = tf_dfs["15m"]
-            price        = df_15["close"].iloc[-1]
-            ema50_15     = calc_ema50(df_15["close"])
-            pct_diff     = (price - ema50_15) / ema50_15 * 100
+            consensus      = consensus_bias(tf_biases)
+            vol_signal_str = volume_signal(tf_dfs["15m"])
+            df_15          = tf_dfs["15m"]
+            price          = float(df_15["close"].iloc[-1])
+            ema50_15       = calc_ema50(df_15["close"])
+            pct_diff       = (price - ema50_15) / ema50_15 * 100
 
-            setup       = detect_setup(symbol, price, tf_biases, consensus, vol_signal, df_15, rsi_15m=tf_rsi["15m"])
             vol_profile = calculate_volume_profile(df_15)
             liq_sweep   = detect_liquidity_sweep(df_15)
 
-            # Liquidity sweep confirms setup direction → add to trigger_reasons
-            if setup and liq_sweep.get("detected"):
-                sweep_dir = "bullish" if liq_sweep["type"] == "bullish_sweep" else "bearish"
-                setup_dir = "bullish" if setup["direction"] == "LONG" else "bearish"
-                if sweep_dir == setup_dir:
-                    setup["trigger_reasons"].append(f"Liquidity sweep ({sweep_dir})")
+            setup = detect_all_setups(
+                symbol=symbol,
+                price=price,
+                rsi=tf_rsi["15m"],
+                tf_biases=tf_biases,
+                consensus=consensus,
+                volume_signal_str=vol_signal_str,
+                klines_15m=df_15,
+                klines_4h=tf_dfs["4h"],
+                liquidity_sweep=liq_sweep,
+            )
 
             results_by_symbol[symbol] = {
-                "symbol":         symbol,
-                "price":          price,
-                "ema50":          ema50_15,
-                "pct_diff":       pct_diff,
-                "rsi14":          tf_rsi["15m"],
-                "tf_biases":      tf_biases,
-                "consensus":      consensus,
-                "volume_signal":  vol_signal,
-                "setup":          setup,
-                "volume_profile": vol_profile,
+                "symbol":          symbol,
+                "price":           price,
+                "ema50":           ema50_15,
+                "pct_diff":        pct_diff,
+                "rsi14":           tf_rsi["15m"],
+                "tf_biases":       tf_biases,
+                "consensus":       consensus,
+                "volume_signal":   vol_signal_str,
+                "setup":           setup,
+                "volume_profile":  vol_profile,
                 "liquidity_sweep": liq_sweep,
             }
             sweep_tag = "  SWEEP" if liq_sweep.get("detected") else ""
-            setup_tag = f"  SETUP={setup['direction']}" if setup else ""
-            print(f"  {tf_biases}  consensus={consensus}  vol={vol_signal}{setup_tag}{sweep_tag}")
+            setup_tag = f"  SETUP={setup['direction']}[{setup['type']}]" if setup else ""
+            print(f"  {tf_biases}  consensus={consensus}  vol={vol_signal_str}{setup_tag}{sweep_tag}")
 
         except Exception as e:
             print(f"  [ERR] {symbol}: {e}")
             errors.append(f"{symbol}: {e}")
 
-    # ── Build snapshot ────────────────────────────────────────────────────────
+    # ── Build snapshot text ───────────────────────────────────────────────────
     sep = "═" * 39
     lines = [sep, f"SNAPSHOT — {ts_label}", sep]
 
     total_counts = {}
-    all_setups = []
+    all_setups   = []
 
     for cat, symbols in WATCHLIST_BY_CATEGORY.items():
         lines.append(f"\n═══ {cat} ═══")
-        cat_counts = {}
-        cat_setup_count = 0
+        cat_counts    = {}
+        cat_setup_cnt = 0
 
         for sym in symbols:
             if sym not in results_by_symbol:
@@ -406,49 +650,47 @@ def main():
             r = results_by_symbol[sym]
             b = r["tf_biases"]
             lines.append(f"{sym}  {fmt_price(sym, r['price'])}")
-            lines.append(
-                f"  15m: {b['15m']:<8} 1h: {b['1h']:<8} 4h: {b['4h']:<8} → {r['consensus']}"
-            )
+            lines.append(f"  15m: {b['15m']:<8} 1h: {b['1h']:<8} 4h: {b['4h']:<8} → {r['consensus']}")
             lines.append(f"  RSI {r['rsi14']:.1f} | Volume: {r['volume_signal']}")
             vp = r.get("volume_profile", {})
             if vp:
-                lines.append(
-                    f"  POC: {fmt_price(sym, vp['poc'])} | VA: {fmt_price(sym, vp['val'])} - {fmt_price(sym, vp['vah'])}"
-                )
+                lines.append(f"  POC: {fmt_price(sym, vp['poc'])} | VA: {fmt_price(sym, vp['val'])} - {fmt_price(sym, vp['vah'])}")
             ls = r.get("liquidity_sweep", {})
             if ls.get("detected"):
-                sw_type = "bullish" if ls["type"] == "bullish_sweep" else "bearish"
-                lines.append(f"  SWEEP: {sw_type} @ {fmt_price(sym, ls['sweep_level'])} (rej {ls['rejection_strength']:.0%})")
+                sw_lbl = "bullish" if ls["type"] == "bullish_sweep" else "bearish"
+                lines.append(f"  SWEEP: {sw_lbl} @ {fmt_price(sym, ls['sweep_level'])} (rej {ls['rejection_strength']:.0%})")
             if r["setup"]:
                 s = r["setup"]
+                st = s.get("type", "STRONG_TREND")
                 lines.append(
-                    f"  ↪ {s['direction']} SETUP: entry {fmt_price(sym, s['entry'])} | "
+                    f"  ↪ {s['direction']} SETUP [{st}]: entry {fmt_price(sym, s['entry'])} | "
                     f"stop {fmt_price(sym, s['stop'])} | target {fmt_price(sym, s['target'])} | "
                     f"R:R {s['rr']}:1"
                 )
-                cat_setup_count += 1
+                cat_setup_cnt += 1
                 all_setups.append((sym, r["setup"]))
 
             c = r["consensus"]
-            cat_counts[c] = cat_counts.get(c, 0) + 1
+            cat_counts[c]   = cat_counts.get(c, 0) + 1
             total_counts[c] = total_counts.get(c, 0) + 1
 
         summary_parts = [f"{v} {k}" for k, v in sorted(cat_counts.items())]
-        setup_suffix = f" | {cat_setup_count} SETUP" if cat_setup_count else ""
-        lines.append(f"→ {', '.join(summary_parts)}{setup_suffix}")
+        setup_sfx = f" | {cat_setup_cnt} SETUP" if cat_setup_cnt else ""
+        lines.append(f"→ {', '.join(summary_parts)}{setup_sfx}")
 
     lines += ["", sep]
-    total_parts = [f"{v} {k}" for k, v in sorted(total_counts.items())]
+    total_parts       = [f"{v} {k}" for k, v in sorted(total_counts.items())]
     total_setup_count = len(all_setups)
-    setup_total_suffix = f" | {total_setup_count} SETUP" if total_setup_count else ""
-    lines.append(f"Genel: {', '.join(total_parts)}{setup_total_suffix}")
+    lines.append(f"Genel: {', '.join(total_parts)}{f' | {total_setup_count} SETUP' if total_setup_count else ''}")
     lines.append(sep)
 
     if all_setups:
         lines.append(f"\n═══ AKTİF SETUPLAR ({total_setup_count}) ═══")
         for sym, s in all_setups:
+            st = s.get("type", "STRONG_TREND")
             lines.append(
-                f"{sym} {s['direction']}  entry {fmt_price(sym, s['entry'])}  R:R {s['rr']}:1"
+                f"{sym} {s['direction']} [{st}]  entry {fmt_price(sym, s['entry'])}  "
+                f"R:R {s['rr']}:1  ({s.get('confidence', '?')})"
             )
         lines.append(sep)
 
@@ -463,27 +705,27 @@ def main():
     with open(DECISIONS_FILE, "a", encoding="utf-8") as f:
         for r in results_by_symbol.values():
             record = {
-                "timestamp":     ts_str,
-                "source":        "mainnet",
-                "symbol":        r["symbol"],
-                "timeframe":     "15m",
-                "type":          "bias",
-                "verdict":       r["tf_biases"]["15m"],
-                "price":         round(r["price"], 6),
-                "ema50":         round(r["ema50"], 6),
-                "rsi14":         round(r["rsi14"], 2),
-                "tf_biases":     r["tf_biases"],
-                "consensus":     r["consensus"],
-                "volume_signal": r["volume_signal"],
+                "timestamp":       ts_str,
+                "source":          "mainnet",
+                "symbol":          r["symbol"],
+                "timeframe":       "15m",
+                "type":            "bias",
+                "verdict":         r["tf_biases"]["15m"],
+                "price":           round(r["price"], 6),
+                "ema50":           round(r["ema50"], 6),
+                "rsi14":           round(r["rsi14"], 2),
+                "tf_biases":       r["tf_biases"],
+                "consensus":       r["consensus"],
+                "volume_signal":   r["volume_signal"],
                 "details": (
                     f"MTF snapshot. EMA50 {'üstünde' if r['pct_diff'] >= 0 else 'altında'} "
                     f"({r['pct_diff']:+.2f}%), RSI {r['rsi14']:.1f}, "
                     f"consensus={r['consensus']}, vol={r['volume_signal']}."
                 ),
-                "setup":          r["setup"],
-                "volume_profile": r.get("volume_profile"),
+                "setup":           r["setup"],
+                "volume_profile":  r.get("volume_profile"),
                 "liquidity_sweep": r.get("liquidity_sweep"),
-                "trade_plan": {"entry": None, "stop": None, "target": None, "rr": None},
+                "trade_plan":      {"entry": None, "stop": None, "target": None, "rr": None},
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     print(f"  [OK] {len(results_by_symbol)} kayıt eklendi.")
@@ -504,7 +746,7 @@ def main():
                             existing_active.add((rec["symbol"], rec["direction"]))
                     except Exception:
                         pass
-        ts_utc = now.astimezone(timezone.utc)
+        ts_utc    = now.astimezone(timezone.utc)
         new_count = 0
         with open(SETUPS_FILE, "a", encoding="utf-8") as f:
             for sym, s in all_setups:
@@ -516,6 +758,8 @@ def main():
                     "timestamp":             ts_str,
                     "symbol":                sym,
                     "direction":             s["direction"],
+                    "type":                  s.get("type", "STRONG_TREND"),
+                    "confidence":            s.get("confidence", "HIGH"),
                     "entry":                 s["entry"],
                     "stop":                  s["stop"],
                     "target":                s["target"],
@@ -549,8 +793,8 @@ def main():
     tg_lines = [f"<b>SNAPSHOT — {ts_label}</b>"]
     for cat, symbols in WATCHLIST_BY_CATEGORY.items():
         tg_lines.append(f"\n<b>═══ {cat} ═══</b>")
-        cat_counts = {}
-        cat_setup_count_tg = 0
+        cat_counts     = {}
+        cat_setup_cnt_tg = 0
         for sym in symbols:
             if sym not in results_by_symbol:
                 tg_lines.append(f"{sym}  HATA")
@@ -558,9 +802,7 @@ def main():
             r = results_by_symbol[sym]
             b = r["tf_biases"]
             tg_lines.append(f"<b>{sym}</b>  {fmt_price(sym, r['price'])}")
-            tg_lines.append(
-                f"  15m:{b['15m'][:4]}  1h:{b['1h'][:4]}  4h:{b['4h'][:4]}  → {r['consensus']}"
-            )
+            tg_lines.append(f"  15m:{b['15m'][:4]}  1h:{b['1h'][:4]}  4h:{b['4h'][:4]}  → {r['consensus']}")
             tg_lines.append(f"  RSI {r['rsi14']:.1f} | {r['volume_signal']}")
             vp = r.get("volume_profile", {})
             if vp:
@@ -569,43 +811,44 @@ def main():
                 )
             ls = r.get("liquidity_sweep", {})
             if ls and ls.get("detected"):
-                sw_type = "bullish" if ls["type"] == "bullish_sweep" else "bearish"
-                tg_lines.append(f"  SWEEP: {sw_type} @ {fmt_price(sym, ls['sweep_level'])}")
+                sw_lbl = "bullish" if ls["type"] == "bullish_sweep" else "bearish"
+                tg_lines.append(f"  SWEEP: {sw_lbl} @ {fmt_price(sym, ls['sweep_level'])}")
             if r["setup"]:
-                s = r["setup"]
+                s  = r["setup"]
+                st = s.get("type", "STRONG_TREND")
+                em = _setup_emoji(s)
                 tg_lines.append(
-                    f"  ↪ {s['direction']} SETUP: entry {fmt_price(sym, s['entry'])} | "
+                    f"  ↪ {s['direction']} SETUP [{st}] {em}: entry {fmt_price(sym, s['entry'])} | "
                     f"stop {fmt_price(sym, s['stop'])} | target {fmt_price(sym, s['target'])} | "
                     f"R:R {s['rr']}:1"
                 )
-                cat_setup_count_tg += 1
+                cat_setup_cnt_tg += 1
             c = r["consensus"]
             cat_counts[c] = cat_counts.get(c, 0) + 1
         summary_parts = [f"{v} {k}" for k, v in sorted(cat_counts.items())]
-        setup_suffix_tg = f" | {cat_setup_count_tg} SETUP" if cat_setup_count_tg else ""
-        tg_lines.append(f"→ {', '.join(summary_parts)}{setup_suffix_tg}")
+        setup_sfx_tg = f" | {cat_setup_cnt_tg} SETUP" if cat_setup_cnt_tg else ""
+        tg_lines.append(f"→ {', '.join(summary_parts)}{setup_sfx_tg}")
 
-    setup_total_suffix_tg = f" | {total_setup_count} SETUP" if total_setup_count else ""
-    tg_lines += ["", f"<b>Genel: {', '.join(total_parts)}{setup_total_suffix_tg}</b>"]
-
+    setup_total_sfx_tg = f" | {total_setup_count} SETUP" if total_setup_count else ""
+    tg_lines += ["", f"<b>Genel: {', '.join(total_parts)}{setup_total_sfx_tg}</b>"]
     snapshot_msg = "\n".join(tg_lines)
 
     if all_setups:
-        # Sort by R:R descending, build detail blocks
         sorted_setups = sorted(all_setups, key=lambda x: x[1]["rr"], reverse=True)
         blocks = [format_setup_block(sym, s) for sym, s in sorted_setups]
-
         full_msg = snapshot_msg + "\n\n" + "\n\n".join(blocks)
         if len(full_msg) <= 4000:
             telegram_send_long(full_msg)
         else:
-            # Send snapshot first, then setup blocks (top 3 full + rest short)
             telegram_send_long(snapshot_msg)
             top3 = blocks[:3]
             rest = sorted_setups[3:]
             detail_msg = "\n\n".join(top3)
             if rest:
-                short = ", ".join(f"{sym} {s['direction']} (R:R {s['rr']})" for sym, s in rest)
+                short = ", ".join(
+                    f"{sym} {s['direction']} [{s.get('type','')}] (R:R {s['rr']})"
+                    for sym, s in rest
+                )
                 detail_msg += f"\n\nAyrıca: {short}"
             telegram_send_long(detail_msg)
     else:

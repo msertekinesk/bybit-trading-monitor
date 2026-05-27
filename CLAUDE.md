@@ -227,6 +227,24 @@ Genel: [tek cümle özet]
 ═══════════════════════════════════════
 ```
 
+## Setup Tipleri
+
+5 farklı setup tipi, öncelik sırasıyla:
+
+| Tip | Tetiklenme Koşulu | Min R:R | Confidence | Emoji |
+|-----|-------------------|---------|------------|-------|
+| STRONG_TREND | 3/3 konsensus + NORMAL/HIGH VOL | 1.5 | HIGH | 🔥 |
+| BREAKOUT | HIGH VOL + dar konsolidasyon (%2.5 range) + kırılım | 1.5 | HIGH | 🚀 |
+| REVERSAL | RSI uç (≤35 veya ≥65) + liquidity sweep + rejection ≥60% | 1.5 | MEDIUM | 🔄 |
+| PULLBACK | 4H/1H aynı yönde + 15m karşı yönde düzeltme | 1.5 | MEDIUM | 📉/📈 |
+| WEAK_TREND | 2/3 konsensus + NORMAL/HIGH VOL | 1.3 | MEDIUM | ⚡ |
+
+**Orchestrator:** Aynı coin için tek setup döner. Öncelik sırası yukarıdaki tablodaki gibi.
+
+**STRONG_SWEEP bonusu:** STRONG_TREND + liquidity sweep aynı yönde → `trigger_reasons`'a eklenir.
+
+---
+
 ## Volume Profile
 
 Her snapshot'ta her coin için son 200 mum 15m verisiyle volume profile hesaplanır.

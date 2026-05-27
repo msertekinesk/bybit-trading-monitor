@@ -318,6 +318,29 @@ def main():
             else:
                 lines.append("Henüz kapanan setup yok.")
 
+            # Setup type breakdown
+            type_stats = {}
+            for s in all_setups_rec:
+                t = s.get("type", "STRONG_TREND")
+                if t not in type_stats:
+                    type_stats[t] = {"total": 0, "win": 0, "loss": 0}
+                type_stats[t]["total"] += 1
+                if s.get("status") == "win":
+                    type_stats[t]["win"] += 1
+                elif s.get("status") == "loss":
+                    type_stats[t]["loss"] += 1
+
+            lines.append("\nSETUP TİPİ DAĞILIMI")
+            for t in ["STRONG_TREND", "BREAKOUT", "REVERSAL", "PULLBACK", "WEAK_TREND"]:
+                stats = type_stats.get(t)
+                if not stats:
+                    continue
+                w_t, l_t, tot_t = stats["win"], stats["loss"], stats["total"]
+                closed_t = w_t + l_t
+                wr_t = int(w_t / closed_t * 100) if closed_t > 0 else 0
+                wr_str = f"%{wr_t}" if closed_t > 0 else "-"
+                lines.append(f"{t}: {tot_t} (W:{w_t}, L:{l_t}) → {wr_str}")
+
     lines += ["", sep]
 
     report = "\n".join(lines)
