@@ -4,6 +4,7 @@ import json
 import time
 import hmac
 import hashlib
+import subprocess
 import requests
 import pandas as pd
 import numpy as np
@@ -453,6 +454,14 @@ def main():
             )
 
     telegram_send_long("\n".join(tg_lines))
+
+    # ── Build dashboard ───────────────────────────────────────────────────────
+    print("[Dashboard] Oluşturuluyor...")
+    try:
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_dashboard.py")
+        subprocess.run(["python3", script], check=False, timeout=30)
+    except Exception as e:
+        print(f"  [WARN] Dashboard oluşturulamadı: {e}")
 
     print("\n=== SNAPSHOT TAMAMLANDI ===")
 
