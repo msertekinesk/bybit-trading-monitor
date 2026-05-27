@@ -161,56 +161,53 @@ def main():
     c7        = sum(1 for s in r7 if s.get("status") in ("win", "loss", "timeout"))
     wr7_str   = f"%{int(w7/c7*100)} ({w7}/{c7})" if c7 > 0 else "—"
 
-    # ── Top movers ────────────────────────────────────────────────────────────
-    sorted_chg   = sorted(changes_24h.items(), key=lambda x: x[1])
-    losers_syms  = [s for s, p in sorted_chg if p < 0][:3]
-    winners_syms = [s for s, p in reversed(sorted_chg) if p > 0][:3]
-
-    # Sparkline data for top movers
+    # ── Sparkline data — all 20 coins ─────────────────────────────────────────
     cutoff_24h    = now_ts - timedelta(hours=24)
     sparkline_data = {}
-    for sym in winners_syms + losers_syms:
+    for sym in ALL_SYMBOLS:
         sym_recs = sorted([r for r in decisions if r.get("symbol") == sym],
                           key=lambda r: parse_ts(r["timestamp"]))
         recent = [r for r in sym_recs if parse_ts(r["timestamp"]) >= cutoff_24h]
+        pct = changes_24h.get(sym)
+        is_winner = pct is not None and pct > 0
         if len(recent) >= 2:
             sparkline_data[sym] = {
                 "labels": [parse_ts(r["timestamp"]).astimezone(TZ_LOCAL).strftime("%H:%M") for r in recent],
                 "prices": [round(r.get("price", 0), 6) for r in recent],
-                "isWinner": sym in winners_syms,
+                "isWinner": is_winner,
             }
 
-    def mover_card(sym, pct, is_winner, delay):
-        col       = "#10b981" if is_winner else "#ef4444"
-        p_str     = escape(fmt_price(sym, latest.get(sym, {}).get("price", 0)))
-        has_spark = sym in sparkline_data
+    def mini_card(sym, delay):
+        pct       = changes_24h.get(sym)
+        is_winner = pct is not None and pct > 0
+        border_col = "#10b981" if is_winner else ("#ef4444" if pct is not None and pct < 0 else "#30363d")
+        pct_col    = "#10b981" if is_winner else ("#ef4444" if pct is not None and pct < 0 else "#64748b")
+        pct_str    = f"{pct:+.1f}%" if pct is not None else "—"
+        has_spark  = sym in sparkline_data
         expand_btn = (
             f'<button onclick="openModal(\'{sym}\')" title="Büyüt" '
-            f'style="position:absolute;top:8px;right:8px;background:none;border:1px solid #30363d;'
-            f'border-radius:4px;color:#64748b;cursor:pointer;padding:3px 5px;line-height:1">'
-            f'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
+            f'style="position:absolute;top:4px;right:4px;background:none;border:none;'
+            f'color:#374151;cursor:pointer;padding:1px;line-height:1">'
+            f'<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
             f'<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>'
             f'</svg></button>' if has_spark else ""
         )
-        canvas = (f'<canvas id="spark-{sym}" style="height:75px;width:100%;margin-top:8px"></canvas>'
+        canvas = (f'<canvas id="spark-{sym}" style="height:30px;width:100%;display:block;margin-top:4px"></canvas>'
                   if has_spark else
-                  '<div style="height:75px;display:flex;align-items:center;justify-content:center;'
-                  'color:#374151;font-size:0.72em;margin-top:8px">veri yetersiz</div>')
-        pr = "padding-right:28px" if has_spark else ""
-        return (f'<div class="card-hover fade-in" style="background:#161b22;border:1px solid {col}33;'
-                f'border-radius:10px;padding:14px;animation-delay:{delay:.2f}s;position:relative">'
+                  '<div style="height:30px;display:flex;align-items:center;justify-content:center;'
+                  'color:#1e2530;font-size:0.6em;margin-top:4px">—</div>')
+        return (f'<div class="card-hover fade-in" '
+                f'style="background:#161b22;border:1px solid #21262d;border-left:3px solid {border_col};'
+                f'border-radius:6px;padding:6px 8px;animation-delay:{delay:.2f}s;position:relative;cursor:default">'
                 f'{expand_btn}'
-                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;{pr}">'
-                f'<div><div style="font-weight:700;color:#e6edf3;font-size:0.9em">{coin(sym)}</div>'
-                f'<div style="color:#64748b;font-size:0.75em;margin-top:2px">{p_str}</div></div>'
-                f'<div style="color:{col};font-size:1em;font-weight:700">{pct:+.2f}%</div>'
+                f'<div style="display:flex;justify-content:space-between;align-items:baseline;padding-right:{12 if has_spark else 0}px">'
+                f'<span style="font-weight:700;color:#e6edf3;font-size:0.78em">{coin(sym)}</span>'
+                f'<span style="color:{pct_col};font-size:0.72em;font-weight:600">{pct_str}</span>'
                 f'</div>{canvas}</div>')
 
     mover_cards = ""
-    for i, sym in enumerate(winners_syms):
-        mover_cards += mover_card(sym, changes_24h[sym], True, i * 0.05)
-    for i, sym in enumerate(losers_syms):
-        mover_cards += mover_card(sym, changes_24h[sym], False, (len(winners_syms) + i) * 0.05)
+    for i, sym in enumerate(ALL_SYMBOLS):
+        mover_cards += mini_card(sym, i * 0.02)
 
     # ── Bias flip timeline (last 48h) ─────────────────────────────────────────
     cutoff_48h  = now_ts - timedelta(hours=48)
@@ -495,11 +492,11 @@ def main():
     </div>
   </div>
 
-  <!-- TOP MOVERS SPARKLINE -->
+  <!-- WATCHLIST OVERVIEW -->
   <div class="panel fade-in" style="animation-delay:0.1s">
-    <div class="stitle">Top Movers (24h)</div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      {mover_cards if (winners_syms or losers_syms) else '<p style="color:#374151;font-style:italic">24h verisi yetersiz.</p>'}
+    <div class="stitle">Watchlist Overview (24h sparklines)</div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+      {mover_cards}
     </div>
   </div>
 
