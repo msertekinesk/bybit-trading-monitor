@@ -22,92 +22,88 @@ WATCHLIST_BY_CATEGORY = {
 ALL_SYMBOLS = [s for syms in WATCHLIST_BY_CATEGORY.values() for s in syms]
 
 CONSENSUS_COLORS = {
-    "STRONG BULLISH": "#059669",
-    "BULLISH":        "#10b981",
-    "MIXED":          "#64748b",
-    "BEARISH":        "#ef4444",
-    "STRONG BEARISH": "#dc2626",
+    "STRONG BULLISH": "#059669", "BULLISH": "#10b981",
+    "MIXED": "#64748b",
+    "BEARISH": "#ef4444", "STRONG BEARISH": "#dc2626",
 }
 BIAS_COLORS = {"bullish": "#10b981", "bearish": "#ef4444", "neutral": "#64748b"}
+HEATMAP_COLS   = ["STRONG BULLISH", "BULLISH", "MIXED", "BEARISH", "STRONG BEARISH"]
+HEATMAP_LABELS = ["S.BULL", "BULL", "MIX", "BEAR", "S.BEAR"]
+HEATMAP_COLORS = ["#059669", "#10b981", "#64748b", "#ef4444", "#dc2626"]
 
 
-def coin(sym):
-    return sym.replace("USDT", "")
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
+def coin(sym): return sym.replace("USDT", "")
 
 def parse_ts(ts_str):
-    try:
-        return datetime.fromisoformat(ts_str)
-    except Exception:
-        return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-
+    try:    return datetime.fromisoformat(ts_str)
+    except: return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
 
 def fmt_price(sym, price):
-    if sym == "BTCUSDT":                                         return f"${price:,.2f}"
-    if sym in ("ETHUSDT", "BNBUSDT", "SOLUSDT", "LTCUSDT"):     return f"${price:.2f}"
-    if price >= 1:                                               return f"${price:.4f}"
-    if price >= 0.01:                                            return f"${price:.4f}"
+    if sym == "BTCUSDT":                                     return f"${price:,.2f}"
+    if sym in ("ETHUSDT","BNBUSDT","SOLUSDT","LTCUSDT"):     return f"${price:.2f}"
+    if price >= 1:                                           return f"${price:.4f}"
+    if price >= 0.01:                                        return f"${price:.4f}"
     return f"${price:.6f}"
-
 
 def load_jsonl(path):
     rows = []
-    if not os.path.exists(path):
-        return rows
+    if not os.path.exists(path): return rows
     with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
-                try:
-                    rows.append(json.loads(line))
-                except Exception:
-                    pass
+                try: rows.append(json.loads(line))
+                except: pass
     return rows
 
-
-def pct_html(pct):
-    color = "#10b981" if pct >= 0 else "#ef4444"
-    return f'<span style="color:{color}">{pct:+.2f}%</span>'
-
+def pct_html(pct, bold=False):
+    c = "#10b981" if pct >= 0 else "#ef4444"
+    fw = "700" if bold else "400"
+    return f'<span style="color:{c};font-weight:{fw}">{pct:+.2f}%</span>'
 
 def bias_badge(bias):
-    color = BIAS_COLORS.get(bias, "#64748b")
+    c = BIAS_COLORS.get(bias, "#64748b")
     letter = {"bullish": "B", "bearish": "b", "neutral": "·"}.get(bias, "?")
-    title = bias or ""
-    return f'<span title="{title}" style="color:{color};font-weight:700;font-size:0.9em">{letter}</span>'
-
+    return f'<span title="{bias}" style="color:{c};font-weight:700;font-size:0.9em">{letter}</span>'
 
 def consensus_badge(c):
-    color = CONSENSUS_COLORS.get(c, "#64748b")
-    return (f'<span style="background:{color}22;color:{color};border:1px solid {color}55;'
+    col = CONSENSUS_COLORS.get(c, "#64748b")
+    return (f'<span style="background:{col}22;color:{col};border:1px solid {col}55;'
             f'padding:2px 7px;border-radius:999px;font-size:0.72em;font-weight:600;white-space:nowrap">'
             f'{escape(c)}</span>')
 
-
 def vol_badge(vol):
-    if vol == "HIGH VOL":  return '<span style="color:#10b981;font-weight:600;font-size:0.78em">HIGH</span>'
-    if vol == "LOW VOL":   return '<span style="color:#374151;font-size:0.78em">LOW</span>'
+    if vol == "HIGH VOL": return '<span style="color:#10b981;font-weight:600;font-size:0.78em">HIGH</span>'
+    if vol == "LOW VOL":  return '<span style="color:#374151;font-size:0.78em">LOW</span>'
     return '<span style="color:#64748b;font-size:0.78em">NRM</span>'
 
-
-def heatmap_cell(count, kind):
+def heatmap_cell_visual(count, kind):
     if count == 0:
-        return f'<td style="text-align:center;padding:8px 14px;color:#374151">·</td>'
-    if kind in ("STRONG BULLISH", "BULLISH"):
-        r, g, b = 16, 185, 129
-    elif kind in ("STRONG BEARISH", "BEARISH"):
-        r, g, b = 239, 68, 68
-    else:
-        r, g, b = 100, 116, 139
-    op = min(0.2 + count * 0.18, 0.95)
-    style = (f"background:rgba({r},{g},{b},{op:.2f});color:#f8fafc;font-weight:700;"
-             f"text-align:center;padding:8px 14px;border-radius:6px")
-    return f'<td style="{style}">{count}</td>'
+        return '<td style="padding:4px 6px"><div style="width:38px;height:26px;background:#1e2530;border-radius:4px"></div></td>'
+    if "BULLISH" in kind:   r, g, b = 16, 185, 129
+    elif "BEARISH" in kind: r, g, b = 239, 68, 68
+    else:                   r, g, b = 100, 116, 139
+    op = min(0.3 + count * 0.22, 1.0)
+    bg = f"rgba({r},{g},{b},{op:.2f})"
+    return (f'<td style="padding:4px 6px">'
+            f'<div title="{count} coin" style="width:38px;height:26px;background:{bg};'
+            f'border-radius:4px;cursor:default;display:flex;align-items:center;justify-content:center;'
+            f'color:rgba(255,255,255,0.8);font-size:0.75em;font-weight:700">{count}</div></td>')
 
+def flip_direction(old_c, new_c):
+    bull = {"STRONG BULLISH", "BULLISH"}
+    bear = {"STRONG BEARISH", "BEARISH"}
+    if old_c in bull and new_c in bear: return "#ef4444", "↓"
+    if old_c in bear and new_c in bull: return "#10b981", "↑"
+    return "#64748b", "↔"
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-
     decisions = load_jsonl(DECISIONS_FILE)
     setups    = load_jsonl(SETUPS_FILE)
 
@@ -119,28 +115,26 @@ def main():
     latest = {}
     for r in decisions:
         sym = r.get("symbol")
-        if not sym:
-            continue
+        if not sym: continue
         try:
             ts = parse_ts(r["timestamp"])
             if sym not in latest or ts > parse_ts(latest[sym]["timestamp"]):
                 latest[sym] = r
-        except Exception:
-            pass
+        except: pass
 
-    now_ts = max(parse_ts(r["timestamp"]) for r in latest.values()) if latest else datetime.now(TZ_LOCAL)
+    now_ts     = max(parse_ts(r["timestamp"]) for r in latest.values()) if latest else datetime.now(TZ_LOCAL)
+    now_utc    = datetime.now(timezone.utc)
     update_str = now_ts.astimezone(TZ_LOCAL).strftime("%Y-%m-%d %H:%M UTC+3")
 
     # ── 24h price changes ─────────────────────────────────────────────────────
-    target_24h = now_ts - timedelta(hours=24)
+    target_24h  = now_ts - timedelta(hours=24)
     changes_24h = {}
     for sym in ALL_SYMBOLS:
         sym_recs = [r for r in decisions if r.get("symbol") == sym]
-        if len(sym_recs) < 2:
-            continue
-        old_rec  = min(sym_recs, key=lambda r: abs((parse_ts(r["timestamp"]) - target_24h).total_seconds()))
-        p_old    = old_rec.get("price", 0)
-        p_new    = latest.get(sym, {}).get("price", 0)
+        if len(sym_recs) < 2: continue
+        old_rec = min(sym_recs, key=lambda r: abs((parse_ts(r["timestamp"]) - target_24h).total_seconds()))
+        p_old = old_rec.get("price", 0)
+        p_new = latest.get(sym, {}).get("price", 0)
         if p_old > 0 and p_new > 0:
             changes_24h[sym] = (p_new - p_old) / p_old * 100
 
@@ -149,145 +143,257 @@ def main():
     for r in latest.values():
         c = r.get("consensus", "MIXED")
         bias_counts[c] = bias_counts.get(c, 0) + 1
-
     total_bull = bias_counts.get("STRONG BULLISH", 0) + bias_counts.get("BULLISH", 0)
     total_bear = bias_counts.get("STRONG BEARISH", 0) + bias_counts.get("BEARISH", 0)
     total_neut = bias_counts.get("MIXED", 0)
 
     # ── Setup stats ───────────────────────────────────────────────────────────
     active_setups = [s for s in setups if s.get("status") == "active"]
-    wins     = sum(1 for s in setups if s.get("status") == "win")
-    losses   = sum(1 for s in setups if s.get("status") == "loss")
-    closed   = wins + losses + sum(1 for s in setups if s.get("status") == "timeout")
-    wr_str   = f"%{int(wins/closed*100)} ({wins}/{closed})" if closed > 0 else "—"
-    net_rr   = round(sum(s["actual_rr"] for s in setups
-                         if s.get("status") != "active" and s.get("actual_rr") is not None), 2)
+    wins      = sum(1 for s in setups if s.get("status") == "win")
+    losses    = sum(1 for s in setups if s.get("status") == "loss")
+    timeouts  = sum(1 for s in setups if s.get("status") == "timeout")
+    closed    = wins + losses + timeouts
+    net_rr    = round(sum(s["actual_rr"] for s in setups
+                          if s.get("status") != "active" and s.get("actual_rr") is not None), 2)
+    cutoff7   = now_utc - timedelta(days=7)
+    r7        = [s for s in setups if parse_ts(s["timestamp"]).astimezone(timezone.utc) >= cutoff7]
+    w7        = sum(1 for s in r7 if s.get("status") == "win")
+    c7        = sum(1 for s in r7 if s.get("status") in ("win", "loss", "timeout"))
+    wr7_str   = f"%{int(w7/c7*100)} ({w7}/{c7})" if c7 > 0 else "—"
 
-    # 7-day win rate
-    cutoff7 = datetime.now(timezone.utc) - timedelta(days=7)
-    r7 = [s for s in setups if parse_ts(s["timestamp"]).astimezone(timezone.utc) >= cutoff7]
-    w7 = sum(1 for s in r7 if s.get("status") == "win")
-    c7 = sum(1 for s in r7 if s.get("status") in ("win", "loss", "timeout"))
-    wr7_str = f"%{int(w7/c7*100)} ({w7}/{c7})" if c7 > 0 else "—"
+    # ── Top movers ────────────────────────────────────────────────────────────
+    sorted_chg   = sorted(changes_24h.items(), key=lambda x: x[1])
+    losers_syms  = [s for s, p in sorted_chg if p < 0][:3]
+    winners_syms = [s for s, p in reversed(sorted_chg) if p > 0][:3]
+
+    # Sparkline data for top movers
+    cutoff_24h    = now_ts - timedelta(hours=24)
+    sparkline_data = {}
+    for sym in winners_syms + losers_syms:
+        sym_recs = sorted([r for r in decisions if r.get("symbol") == sym],
+                          key=lambda r: parse_ts(r["timestamp"]))
+        recent = [r for r in sym_recs if parse_ts(r["timestamp"]) >= cutoff_24h]
+        if len(recent) >= 2:
+            sparkline_data[sym] = {
+                "labels": [parse_ts(r["timestamp"]).astimezone(TZ_LOCAL).strftime("%H:%M") for r in recent],
+                "prices": [round(r.get("price", 0), 6) for r in recent],
+            }
+
+    def mover_card(sym, pct, is_winner, delay):
+        col    = "#10b981" if is_winner else "#ef4444"
+        p_str  = escape(fmt_price(sym, latest.get(sym, {}).get("price", 0)))
+        canvas = (f'<canvas id="spark-{sym}" data-winner="{"true" if is_winner else "false"}"'
+                  f' style="height:56px;width:100%;margin-top:8px"></canvas>'
+                  if sym in sparkline_data
+                  else '<div style="height:56px;display:flex;align-items:center;justify-content:center;'
+                       'color:#374151;font-size:0.72em;margin-top:8px">veri yetersiz</div>')
+        return (f'<div class="card-hover fade-in" style="background:#161b22;border:1px solid {col}33;'
+                f'border-radius:10px;padding:16px;animation-delay:{delay:.2f}s">'
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+                f'<div><div style="font-weight:700;color:#e6edf3">{coin(sym)}</div>'
+                f'<div style="color:#64748b;font-size:0.78em;margin-top:2px">{p_str}</div></div>'
+                f'<div style="color:{col};font-size:1.1em;font-weight:700">{pct:+.2f}%</div>'
+                f'</div>{canvas}</div>')
+
+    mover_cards = ""
+    for i, sym in enumerate(winners_syms):
+        mover_cards += mover_card(sym, changes_24h[sym], True, i * 0.05)
+    for i, sym in enumerate(losers_syms):
+        mover_cards += mover_card(sym, changes_24h[sym], False, (len(winners_syms) + i) * 0.05)
+
+    # ── Bias flip timeline (last 48h) ─────────────────────────────────────────
+    cutoff_48h  = now_ts - timedelta(hours=48)
+    flip_events = []
+    for sym in ALL_SYMBOLS:
+        sym_recs = sorted([r for r in decisions if r.get("symbol") == sym],
+                          key=lambda r: parse_ts(r["timestamp"]))
+        for i in range(1, len(sym_recs)):
+            old_c = sym_recs[i-1].get("consensus", "MIXED")
+            new_c = sym_recs[i].get("consensus", "MIXED")
+            if old_c != new_c:
+                ts = parse_ts(sym_recs[i]["timestamp"])
+                if ts >= cutoff_48h:
+                    flip_events.append({"ts": ts, "sym": sym, "old": old_c, "new": new_c})
+    flip_events.sort(key=lambda x: x["ts"], reverse=True)
+    flip_events = flip_events[:20]
+
+    flip_html = ""
+    if flip_events:
+        for i, ev in enumerate(flip_events):
+            ts_l  = ev["ts"].astimezone(TZ_LOCAL).strftime("%d.%m %H:%M")
+            col, arrow = flip_direction(ev["old"], ev["new"])
+            old_s = ev["old"].replace("STRONG ", "S.")
+            new_s = ev["new"].replace("STRONG ", "S.")
+            delay = i * 0.04
+            flip_html += (f'<div class="fade-in" style="display:flex;align-items:center;gap:10px;'
+                          f'padding:7px 0;border-bottom:1px solid #1e2530;animation-delay:{delay:.2f}s">'
+                          f'<span style="color:#4b5563;font-size:0.7em;white-space:nowrap;min-width:72px">{ts_l}</span>'
+                          f'<span style="color:{col};font-weight:700;font-size:1.1em">{arrow}</span>'
+                          f'<span style="color:#c9d1d9;font-weight:700;font-size:0.85em">{coin(ev["sym"])}</span>'
+                          f'<span style="color:#4b5563;font-size:0.75em">{escape(old_s)}'
+                          f' → <span style="color:{col}">{escape(new_s)}</span></span></div>')
+    else:
+        flip_html = '<p style="color:#374151;font-style:italic;padding:8px 0">Son 48 saatte flip yok.</p>'
 
     # ── Category heatmap ─────────────────────────────────────────────────────
-    HEATMAP_COLS = ["STRONG BULLISH", "BULLISH", "MIXED", "BEARISH", "STRONG BEARISH"]
-    HEATMAP_LABELS = ["S.BULL", "BULL", "MIX", "BEAR", "S.BEAR"]
-    HEATMAP_COLORS = ["#059669", "#10b981", "#64748b", "#ef4444", "#dc2626"]
-
-    header_cells = "".join(
-        f'<th style="color:{c};font-size:0.72em;padding:6px 14px;font-weight:600">{lb}</th>'
+    hm_header = "".join(
+        f'<th style="color:{c};font-size:0.7em;padding:4px 8px;font-weight:600;text-align:center">{lb}</th>'
         for lb, c in zip(HEATMAP_LABELS, HEATMAP_COLORS)
     )
-    heatmap_rows = ""
+    hm_rows = ""
     for cat, symbols in WATCHLIST_BY_CATEGORY.items():
         counts = {col: 0 for col in HEATMAP_COLS}
         for sym in symbols:
             if sym in latest:
                 c = latest[sym].get("consensus", "MIXED")
-                if c in counts:
-                    counts[c] += 1
-        cells = "".join(heatmap_cell(counts[col], col) for col in HEATMAP_COLS)
-        heatmap_rows += f'<tr><td style="color:#8b949e;font-size:0.8em;padding:8px 16px 8px 0;white-space:nowrap">{escape(cat)}</td>{cells}</tr>\n'
+                if c in counts: counts[c] += 1
+        cells = "".join(heatmap_cell_visual(counts[col], col) for col in HEATMAP_COLS)
+        hm_rows += (f'<tr><td style="color:#8b949e;font-size:0.78em;padding:6px 10px 6px 0;'
+                    f'white-space:nowrap">{escape(cat)}</td>{cells}</tr>\n')
+
+    legend_html = "".join(
+        f'<span style="display:flex;align-items:center;gap:4px;font-size:0.68em;color:{c}">'
+        f'<span style="width:10px;height:10px;background:{c};border-radius:2px;display:inline-block"></span>{lb}</span>'
+        for lb, c in zip(HEATMAP_LABELS, HEATMAP_COLORS)
+    )
 
     # ── Coin table rows ───────────────────────────────────────────────────────
     coin_rows = ""
     for cat, symbols in WATCHLIST_BY_CATEGORY.items():
         for sym in symbols:
-            if sym not in latest:
-                continue
-            r       = latest[sym]
-            price   = r.get("price", 0)
-            ema50   = r.get("ema50", 0)
-            ema_pct = (price - ema50) / ema50 * 100 if ema50 > 0 else 0
-            rsi     = r.get("rsi14", 0)
-            tf      = r.get("tf_biases", {})
-            cons    = r.get("consensus", "MIXED")
-            vol     = r.get("volume_signal", "")
-            chg     = changes_24h.get(sym)
-            rsi_col = "#ef4444" if rsi > 70 else ("#10b981" if rsi < 30 else "#c9d1d9")
-            rsi_fw  = "700" if (rsi > 70 or rsi < 30) else "400"
-            chg_html = pct_html(chg) if chg is not None else '<span style="color:#374151">—</span>'
-            coin_rows += f"""
-            <tr style="border-bottom:1px solid #21262d">
-              <td style="padding:10px 12px;white-space:nowrap">
-                <span style="font-weight:700;color:#e6edf3">{coin(sym)}</span>
-                <span style="color:#374151;font-size:0.72em;margin-left:6px">{escape(cat)}</span>
-              </td>
-              <td style="padding:10px 12px;font-family:monospace;color:#c9d1d9">{escape(fmt_price(sym, price))}</td>
-              <td style="padding:10px 12px">{pct_html(ema_pct)}</td>
-              <td style="padding:10px 12px;color:{rsi_col};font-weight:{rsi_fw}">{rsi:.1f}</td>
-              <td style="padding:10px 12px;text-align:center">{bias_badge(tf.get('15m',''))}</td>
-              <td style="padding:10px 12px;text-align:center">{bias_badge(tf.get('1h',''))}</td>
-              <td style="padding:10px 12px;text-align:center">{bias_badge(tf.get('4h',''))}</td>
-              <td style="padding:10px 12px">{consensus_badge(cons)}</td>
-              <td style="padding:10px 12px">{vol_badge(vol)}</td>
-              <td style="padding:10px 12px">{chg_html}</td>
-            </tr>"""
+            if sym not in latest: continue
+            r     = latest[sym]
+            price = r.get("price", 0)
+            ema50 = r.get("ema50", 0)
+            e_pct = (price - ema50) / ema50 * 100 if ema50 > 0 else 0
+            rsi   = r.get("rsi14", 0)
+            tf    = r.get("tf_biases", {})
+            cons  = r.get("consensus", "MIXED")
+            vol   = r.get("volume_signal", "")
+            chg   = changes_24h.get(sym)
+            rc    = "#ef4444" if rsi > 70 else ("#10b981" if rsi < 30 else "#c9d1d9")
+            rfw   = "700" if (rsi > 70 or rsi < 30) else "400"
+            chg_h = pct_html(chg) if chg is not None else '<span style="color:#374151">—</span>'
+            coin_rows += (
+                f'<tr class="trow"><td style="padding:10px 12px;white-space:nowrap">'
+                f'<span style="font-weight:700;color:#e6edf3">{coin(sym)}</span>'
+                f'<span style="color:#374151;font-size:0.7em;margin-left:6px">{escape(cat)}</span></td>'
+                f'<td style="padding:10px 12px;font-family:monospace;color:#c9d1d9">{escape(fmt_price(sym, price))}</td>'
+                f'<td style="padding:10px 12px">{pct_html(e_pct)}</td>'
+                f'<td style="padding:10px 12px;color:{rc};font-weight:{rfw}">{rsi:.1f}</td>'
+                f'<td style="text-align:center;padding:10px 8px">{bias_badge(tf.get("15m",""))}</td>'
+                f'<td style="text-align:center;padding:10px 8px">{bias_badge(tf.get("1h",""))}</td>'
+                f'<td style="text-align:center;padding:10px 8px">{bias_badge(tf.get("4h",""))}</td>'
+                f'<td style="padding:10px 12px">{consensus_badge(cons)}</td>'
+                f'<td style="padding:10px 12px">{vol_badge(vol)}</td>'
+                f'<td style="padding:10px 12px">{chg_h}</td></tr>'
+            )
 
     # ── Active setups ─────────────────────────────────────────────────────────
-    now_utc = datetime.now(timezone.utc)
     if active_setups:
-        setup_rows = ""
+        srows = ""
         for s in active_setups:
             age_h = int((now_utc - parse_ts(s["timestamp"]).astimezone(timezone.utc)).total_seconds() / 3600)
             dc = "#10b981" if s["direction"] == "LONG" else "#ef4444"
-            setup_rows += f"""
-            <tr style="border-bottom:1px solid #21262d">
-              <td style="padding:10px 12px;font-weight:700">{coin(s['symbol'])}</td>
-              <td style="padding:10px 12px;color:{dc};font-weight:600">{s['direction']}</td>
-              <td style="padding:10px 12px;font-family:monospace">{s['entry']}</td>
-              <td style="padding:10px 12px;font-family:monospace;color:#ef4444">{s['stop']}</td>
-              <td style="padding:10px 12px;font-family:monospace;color:#10b981">{s['target']}</td>
-              <td style="padding:10px 12px;color:#f59e0b;font-weight:600">{s['rr_planned']}:1</td>
-              <td style="padding:10px 12px;color:#64748b">{age_h}s önce</td>
-            </tr>"""
-        setups_html = f"""<table><thead>
-          <tr style="border-bottom:1px solid #30363d">
-            {''.join(f'<th style="text-align:left;padding:8px 12px;color:#64748b;font-size:0.75em">{h}</th>' for h in ['SYM','DIR','ENTRY','STOP','TARGET','R:R','AGE'])}
-          </tr></thead><tbody>{setup_rows}</tbody></table>"""
+            srows += (f'<tr class="trow"><td style="padding:10px 12px;font-weight:700">{coin(s["symbol"])}</td>'
+                      f'<td style="padding:10px 12px;color:{dc};font-weight:600">{s["direction"]}</td>'
+                      f'<td style="padding:10px 12px;font-family:monospace">{s["entry"]}</td>'
+                      f'<td style="padding:10px 12px;font-family:monospace;color:#ef4444">{s["stop"]}</td>'
+                      f'<td style="padding:10px 12px;font-family:monospace;color:#10b981">{s["target"]}</td>'
+                      f'<td style="padding:10px 12px;color:#f59e0b;font-weight:600">{s["rr_planned"]}:1</td>'
+                      f'<td style="padding:10px 12px;color:#64748b">{age_h}s önce</td></tr>')
+        th = "".join(f'<th style="text-align:left;padding:8px 12px;color:#64748b;font-size:0.72em">{h}</th>'
+                     for h in ["SYM", "DIR", "ENTRY", "STOP", "TARGET", "R:R", "AGE"])
+        setup_html = f'<table><thead><tr style="border-bottom:1px solid #30363d">{th}</tr></thead><tbody>{srows}</tbody></table>'
     else:
-        setups_html = '<p style="color:#374151;font-style:italic;padding:8px 0">Şu an aktif setup yok.</p>'
+        setup_html = '<p style="color:#374151;font-style:italic;padding:8px 0">Şu an aktif setup yok.</p>'
 
-    # ── Performance block ─────────────────────────────────────────────────────
+    # ── Performance + doughnut ────────────────────────────────────────────────
+    doughnut_json = json.dumps({
+        "total": len(setups), "wins": wins, "losses": losses,
+        "timeouts": timeouts, "active": len(active_setups)
+    })
     if setups:
-        net_color = "#10b981" if net_rr >= 0 else "#ef4444"
-        stats = [
-            ("TOPLAM", str(len(setups)), "#8b949e"),
-            ("AKTİF",  str(len(active_setups)), "#64748b"),
-            ("WIN",    str(wins),   "#10b981"),
-            ("LOSS",   str(losses), "#ef4444"),
-            ("W.RATE", wr_str,      "#f59e0b"),
-            ("NET R",  f"{net_rr:+.2f}R", net_color),
-        ]
-        perf_html = '<div style="display:flex;gap:28px;flex-wrap:wrap">' + "".join(
-            f'<div><div style="color:#64748b;font-size:0.72em;font-weight:600;text-transform:uppercase;margin-bottom:4px">{k}</div>'
-            f'<div style="font-size:1.4em;font-weight:700;color:{c}">{escape(v)}</div></div>'
+        net_col = "#10b981" if net_rr >= 0 else "#ef4444"
+        wr_all  = f"%{int(wins/closed*100)} ({wins}/{closed})" if closed > 0 else "—"
+        stats   = [("TOPLAM", str(len(setups)), "#8b949e"), ("AKTİF", str(len(active_setups)), "#3b82f6"),
+                   ("WIN", str(wins), "#10b981"), ("LOSS", str(losses), "#ef4444"),
+                   ("W.RATE", wr_all, "#f59e0b"), ("NET R", f"{net_rr:+.2f}R", net_col)]
+        stat_bl = "".join(
+            f'<div style="text-align:center"><div style="color:#64748b;font-size:0.68em;font-weight:600;'
+            f'text-transform:uppercase;margin-bottom:4px">{k}</div>'
+            f'<div style="font-size:1.25em;font-weight:700;color:{c}">{escape(v)}</div></div>'
             for k, v, c in stats
-        ) + "</div>"
+        )
+        perf_html = (f'<div style="display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center">'
+                     f'<div style="height:170px;position:relative"><canvas id="perf-doughnut"></canvas></div>'
+                     f'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">{stat_bl}</div>'
+                     f'</div>')
     else:
-        perf_html = '<p style="color:#374151;font-style:italic">Henüz setup verisi yok.</p>'
+        perf_html = '<p style="color:#374151;font-style:italic">Henüz setup verisi yok. İlk setup tetiklendiğinde grafik burada görünecek.</p>'
 
-    # ── Top movers ────────────────────────────────────────────────────────────
-    sorted_chg = sorted(changes_24h.items(), key=lambda x: x[1])
-    losers  = sorted_chg[:5]
-    winners = list(reversed(sorted_chg))[:5]
-    winners = [(s, p) for s, p in winners if p > 0]
+    # ── Chart JS ──────────────────────────────────────────────────────────────
+    spark_json = json.dumps(sparkline_data)
+    chart_js   = f"""
+    // Sparklines
+    const sparkData = {spark_json};
+    Object.entries(sparkData).forEach(([sym, d]) => {{
+      const el = document.getElementById('spark-' + sym);
+      if (!el) return;
+      const isWinner = el.dataset.winner === 'true';
+      const col = isWinner ? '#10b981' : '#ef4444';
+      new Chart(el, {{
+        type: 'line',
+        data: {{
+          labels: d.labels,
+          datasets: [{{ data: d.prices, borderColor: col, borderWidth: 1.5,
+                        pointRadius: 0, fill: true, backgroundColor: col + '18', tension: 0.4 }}]
+        }},
+        options: {{
+          responsive: true, maintainAspectRatio: false,
+          plugins: {{ legend: {{ display: false }}, tooltip: {{ enabled: false }} }},
+          scales: {{ x: {{ display: false }}, y: {{ display: false }} }},
+          animation: {{ duration: 800 }}
+        }}
+      }});
+    }});
 
-    def mover_row(sym, pct):
-        return (f'<div style="display:flex;justify-content:space-between;padding:6px 0;'
-                f'border-bottom:1px solid #21262d">'
-                f'<span style="color:#c9d1d9;font-weight:600">{coin(sym)}</span>'
-                f'{pct_html(pct)}</div>')
+    // Doughnut
+    const dData = {doughnut_json};
+    if (dData.total > 0) {{
+      const dc = document.getElementById('perf-doughnut');
+      if (dc) {{
+        new Chart(dc, {{
+          type: 'doughnut',
+          data: {{
+            labels: ['Win', 'Loss', 'Timeout', 'Aktif'],
+            datasets: [{{
+              data: [dData.wins, dData.losses, dData.timeouts, dData.active],
+              backgroundColor: ['#10b981', '#ef4444', '#64748b', '#3b82f6'],
+              borderWidth: 0, borderRadius: 3
+            }}]
+          }},
+          options: {{
+            responsive: true, maintainAspectRatio: false, cutout: '62%',
+            plugins: {{
+              legend: {{ position: 'bottom',
+                         labels: {{ color: '#8b949e', font: {{ size: 10 }}, padding: 12, boxWidth: 10 }} }}
+            }}
+          }}
+        }});
+      }}
+    }}
+    """
 
-    movers_html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">'
-    movers_html += '<div><div style="color:#ef4444;font-size:0.75em;font-weight:600;margin-bottom:8px">TOP LOSERS (24h)</div>'
-    movers_html += "".join(mover_row(s, p) for s, p in losers if p < 0) or '<span style="color:#374151">Yok</span>'
-    movers_html += '</div><div><div style="color:#10b981;font-size:0.75em;font-weight:600;margin-bottom:8px">TOP WINNERS (24h)</div>'
-    movers_html += "".join(mover_row(s, p) for s, p in winners) or '<span style="color:#374151">Yok</span>'
-    movers_html += '</div></div>'
+    # ── Table headers helper ──────────────────────────────────────────────────
+    def th(headers):
+        return "".join(
+            f'<th style="text-align:{"center" if h in ["15m","1h","4h"] else "left"};'
+            f'padding:8px 12px;color:#64748b;font-size:0.72em">{h}</th>'
+            for h in headers
+        )
 
-    # ── Full HTML ─────────────────────────────────────────────────────────────
+    # ── HTML ──────────────────────────────────────────────────────────────────
     html = f"""<!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -296,12 +402,18 @@ def main():
   <meta http-equiv="refresh" content="3600">
   <title>Bybit Trading Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    * {{ box-sizing:border-box; }}
     body {{ background:#0d1117; color:#e6edf3; font-family:system-ui,-apple-system,sans-serif; margin:0; }}
     .panel {{ background:#161b22; border:1px solid #30363d; border-radius:12px; padding:24px; margin-bottom:20px; }}
-    .section-title {{ color:#8b949e; font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:16px; }}
+    .stitle {{ color:#8b949e; font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:16px; }}
     table {{ width:100%; border-collapse:collapse; }}
-    tr:hover {{ background:rgba(255,255,255,0.025); }}
+    .trow:hover {{ background:rgba(255,255,255,0.025); }}
+    .card-hover {{ transition:transform 0.2s ease, box-shadow 0.2s ease; }}
+    .card-hover:hover {{ transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.4); }}
+    @keyframes fadeInUp {{ from {{ opacity:0; transform:translateY(14px); }} to {{ opacity:1; transform:translateY(0); }} }}
+    .fade-in {{ animation:fadeInUp 0.4s ease forwards; opacity:0; }}
     ::-webkit-scrollbar {{ height:4px; width:4px; }}
     ::-webkit-scrollbar-thumb {{ background:#30363d; border-radius:2px; }}
   </style>
@@ -309,56 +421,68 @@ def main():
 <body style="min-height:100vh;padding:24px;max-width:1200px;margin:0 auto">
 
   <!-- HEADER -->
-  <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid #21262d">
+  <div class="fade-in" style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid #21262d">
     <h1 style="font-size:1.4em;font-weight:700;color:#e6edf3;margin:0 0 4px">Bybit Trading Monitor</h1>
     <p style="color:#64748b;font-size:0.85em;margin:0">Live Dashboard &middot; {escape(update_str)}</p>
   </div>
 
   <!-- SUMMARY CARDS -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px">
-    <div style="background:#10b98122;border:1px solid #10b98144;border-radius:10px;padding:18px 20px">
+  <div class="fade-in" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;animation-delay:0.05s">
+    <div class="card-hover" style="background:#10b98118;border:1px solid #10b98144;border-radius:10px;padding:18px 20px">
       <div style="color:#10b981;font-size:0.72em;font-weight:600;text-transform:uppercase;margin-bottom:6px">Bullish</div>
       <div style="color:#e6edf3;font-size:2em;font-weight:700">{total_bull}</div>
     </div>
-    <div style="background:#ef444422;border:1px solid #ef444444;border-radius:10px;padding:18px 20px">
+    <div class="card-hover" style="background:#ef444418;border:1px solid #ef444444;border-radius:10px;padding:18px 20px">
       <div style="color:#ef4444;font-size:0.72em;font-weight:600;text-transform:uppercase;margin-bottom:6px">Bearish</div>
       <div style="color:#e6edf3;font-size:2em;font-weight:700">{total_bear}</div>
     </div>
-    <div style="background:#64748b22;border:1px solid #64748b44;border-radius:10px;padding:18px 20px">
+    <div class="card-hover" style="background:#64748b18;border:1px solid #64748b44;border-radius:10px;padding:18px 20px">
       <div style="color:#64748b;font-size:0.72em;font-weight:600;text-transform:uppercase;margin-bottom:6px">Neutral/Mixed</div>
       <div style="color:#e6edf3;font-size:2em;font-weight:700">{total_neut}</div>
     </div>
-    <div style="background:#f59e0b22;border:1px solid #f59e0b44;border-radius:10px;padding:18px 20px">
+    <div class="card-hover" style="background:#f59e0b18;border:1px solid #f59e0b44;border-radius:10px;padding:18px 20px">
       <div style="color:#f59e0b;font-size:0.72em;font-weight:600;text-transform:uppercase;margin-bottom:6px">Win Rate 7d</div>
       <div style="color:#e6edf3;font-size:1.5em;font-weight:700">{escape(wr7_str)}</div>
     </div>
   </div>
 
-  <!-- TOP MOVERS + HEATMAP (side by side on desktop) -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
-    <div class="panel" style="margin-bottom:0">
-      <div class="section-title">Top Movers (24h)</div>
-      {movers_html}
-    </div>
-    <div class="panel" style="margin-bottom:0;overflow-x:auto">
-      <div class="section-title">Kategori Heatmap</div>
-      <table>
-        <thead><tr>
-          <th style="text-align:left;padding:6px 0;width:80px"></th>
-          {header_cells}
-        </tr></thead>
-        <tbody>{heatmap_rows}</tbody>
-      </table>
+  <!-- TOP MOVERS SPARKLINE -->
+  <div class="panel fade-in" style="animation-delay:0.1s">
+    <div class="stitle">Top Movers (24h)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px">
+      {mover_cards if (winners_syms or losers_syms) else '<p style="color:#374151;font-style:italic">24h verisi yetersiz.</p>'}
     </div>
   </div>
 
+  <!-- HEATMAP + FLIP TIMELINE -->
+  <div class="fade-in" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;animation-delay:0.15s">
+
+    <div class="panel" style="margin-bottom:0;overflow-x:auto">
+      <div class="stitle">Kategori Heatmap</div>
+      <table>
+        <thead><tr>
+          <th style="text-align:left;padding:4px 0;width:80px"></th>
+          {hm_header}
+        </tr></thead>
+        <tbody>{hm_rows}</tbody>
+      </table>
+      <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap">{legend_html}</div>
+    </div>
+
+    <div class="panel" style="margin-bottom:0;overflow-y:auto;max-height:300px">
+      <div class="stitle">Bias Flip Timeline (48h)</div>
+      {flip_html}
+    </div>
+
+  </div>
+
   <!-- COIN TABLE -->
-  <div class="panel" style="overflow-x:auto">
-    <div class="section-title">Coin Durumu</div>
+  <div class="panel fade-in" style="overflow-x:auto;animation-delay:0.2s">
+    <div class="stitle">Coin Durumu</div>
     <table>
       <thead>
         <tr style="border-bottom:1px solid #21262d">
-          {''.join(f'<th style="text-align:{"center" if h in ["15m","1h","4h"] else "left"};padding:8px 12px;color:#64748b;font-size:0.72em">{h}</th>' for h in ["SYMBOL","PRICE","EMA%","RSI","15m","1h","4h","CONSENSUS","VOL","24h%"])}
+          {th(["SYMBOL","PRICE","EMA%","RSI","15m","1h","4h","CONSENSUS","VOL","24h%"])}
         </tr>
       </thead>
       <tbody>{coin_rows}</tbody>
@@ -366,14 +490,14 @@ def main():
   </div>
 
   <!-- ACTIVE SETUPS -->
-  <div class="panel" style="overflow-x:auto">
-    <div class="section-title">Aktif Setuplar ({len(active_setups)})</div>
-    {setups_html}
+  <div class="panel fade-in" style="overflow-x:auto;animation-delay:0.25s">
+    <div class="stitle">Aktif Setuplar ({len(active_setups)})</div>
+    {setup_html}
   </div>
 
   <!-- PERFORMANCE -->
-  <div class="panel">
-    <div class="section-title">Performans Özeti</div>
+  <div class="panel fade-in" style="animation-delay:0.3s">
+    <div class="stitle">Performans Özeti</div>
     {perf_html}
   </div>
 
@@ -382,6 +506,9 @@ def main():
     Auto-generated by GitHub Actions &middot; Updated hourly
   </div>
 
+  <script>
+    {chart_js}
+  </script>
 </body>
 </html>"""
 
