@@ -100,6 +100,248 @@ def flip_direction(old_c, new_c):
     return "#64748b", "↔"
 
 
+# ── Coin detail page ──────────────────────────────────────────────────────────
+
+def coin_page_html(sym, stats, sym_setups, changes_24h):
+    cname    = sym.replace("USDT", "")
+    price    = stats.get("price", 0) if stats else 0
+    ema50    = stats.get("ema50", 0) if stats else 0
+    rsi14    = stats.get("rsi14", 0) if stats else 0
+    vol      = stats.get("volume_signal", "—") if stats else "—"
+    cons     = stats.get("consensus", "—") if stats else "—"
+    tf_b     = stats.get("tf_biases", {}) if stats else {}
+    chg      = changes_24h.get(sym)
+    chg_str  = f"{chg:+.2f}%" if chg is not None else "—"
+    chg_col  = "#10b981" if (chg or 0) >= 0 else "#ef4444"
+    ema_pct  = (price - ema50) / ema50 * 100 if ema50 > 0 else 0
+    cons_col = CONSENSUS_COLORS.get(cons, "#64748b")
+    now_utc  = datetime.now(timezone.utc)
+    sets_json = json.dumps(sym_setups)
+
+    # Active setups table
+    active = [s for s in sym_setups if s.get("status") == "active"]
+    if active:
+        ths_a = "".join(f'<th style="text-align:left;padding:8px 12px;color:#64748b;font-size:0.72em">{h}</th>'
+                        for h in ["DIR", "ENTRY", "SL", "TP", "R:R", "AGE"])
+        arows = ""
+        for s in active:
+            age_h = int((now_utc - parse_ts(s["timestamp"]).astimezone(timezone.utc)).total_seconds() / 3600)
+            dc = "#10b981" if s["direction"] == "LONG" else "#ef4444"
+            arows += (f'<tr class="trow">'
+                      f'<td style="padding:8px 12px;color:{dc};font-weight:600">{s["direction"]}</td>'
+                      f'<td style="padding:8px 12px;font-family:monospace">{s["entry"]}</td>'
+                      f'<td style="padding:8px 12px;font-family:monospace;color:#ef4444">{s["stop"]}</td>'
+                      f'<td style="padding:8px 12px;font-family:monospace;color:#10b981">{s["target"]}</td>'
+                      f'<td style="padding:8px 12px;color:#f59e0b;font-weight:600">{s.get("rr_planned","—")}:1</td>'
+                      f'<td style="padding:8px 12px;color:#64748b">{age_h}s önce</td></tr>')
+        active_html = (f'<div style="overflow-x:auto"><table>'
+                       f'<thead><tr style="border-bottom:1px solid #30363d">{ths_a}</tr></thead>'
+                       f'<tbody>{arows}</tbody></table></div>')
+    else:
+        active_html = '<p style="color:#374151;font-style:italic;padding:8px 0">Aktif setup yok.</p>'
+
+    # Closed setups table
+    closed = sorted([s for s in sym_setups if s.get("status") in ("win", "loss", "timeout")],
+                    key=lambda x: x.get("timestamp", ""), reverse=True)[:50]
+    if closed:
+        ths_c = "".join(f'<th style="text-align:left;padding:8px 12px;color:#64748b;font-size:0.72em">{h}</th>'
+                        for h in ["TARİH", "DIR", "ENTRY", "RESULT", "P&L"])
+        crows = ""
+        for s in closed:
+            status = s.get("status", "")
+            sc  = {"win": "#10b981", "loss": "#ef4444", "timeout": "#64748b"}.get(status, "#64748b")
+            slb = {"win": "WIN", "loss": "LOSS", "timeout": "TIMEOUT"}.get(status, status.upper())
+            ts_l = parse_ts(s["timestamp"]).astimezone(TZ_LOCAL).strftime("%d.%m %H:%M")
+            arr  = s.get("actual_rr")
+            rr_s = f"{arr:+.2f}R" if arr is not None else "—"
+            dc   = "#10b981" if s["direction"] == "LONG" else "#ef4444"
+            crows += (f'<tr class="trow">'
+                      f'<td style="padding:8px 12px;color:#64748b;font-size:0.85em">{ts_l}</td>'
+                      f'<td style="padding:8px 12px;color:{dc};font-weight:600">{s["direction"]}</td>'
+                      f'<td style="padding:8px 12px;font-family:monospace">{s["entry"]}</td>'
+                      f'<td style="padding:8px 12px;color:{sc};font-weight:600">{slb}</td>'
+                      f'<td style="padding:8px 12px;color:{sc};font-weight:600">{rr_s}</td></tr>')
+        closed_html = (f'<div style="overflow-x:auto"><table>'
+                       f'<thead><tr style="border-bottom:1px solid #30363d">{ths_c}</tr></thead>'
+                       f'<tbody>{crows}</tbody></table></div>')
+    else:
+        closed_html = '<p style="color:#374151;font-style:italic;padding:8px 0">Henüz tamamlanmış setup yok.</p>'
+
+    return f"""<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>{cname} — Bybit Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    * {{ box-sizing:border-box; }}
+    body {{ background:#0d1117; color:#e6edf3; font-family:system-ui,-apple-system,sans-serif; margin:0; }}
+    .panel {{ background:#161b22; border:1px solid #30363d; border-radius:12px; padding:24px; margin-bottom:20px; }}
+    .stitle {{ color:#8b949e; font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:16px; }}
+    table {{ width:100%; border-collapse:collapse; }}
+    .trow:hover {{ background:rgba(255,255,255,0.025); }}
+    .tf-btn {{ background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px;
+               padding:5px 14px; cursor:pointer; font-size:0.82em; transition:all 0.15s; }}
+    .tf-btn.active {{ background:#1d4ed8; border-color:#3b82f6; color:#fff; }}
+    .tf-btn:hover:not(.active) {{ border-color:#58a6ff; color:#58a6ff; }}
+  </style>
+</head>
+<body style="min-height:100vh;padding:24px;max-width:1200px;margin:0 auto">
+
+  <!-- HEADER -->
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #21262d;flex-wrap:wrap">
+    <a href="../index.html" style="color:#64748b;text-decoration:none;font-size:0.85em;white-space:nowrap">&#8592; Dashboard</a>
+    <h1 style="flex:1;font-size:1.8em;font-weight:800;color:#e6edf3;margin:0">
+      {cname}<span style="font-size:0.5em;color:#64748b;font-weight:400;margin-left:6px">USDT</span>
+    </h1>
+    <div style="text-align:right">
+      <div id="live-price" style="font-size:1.4em;font-weight:700;color:#e6edf3;font-family:monospace">{escape(fmt_price(sym, price))}</div>
+      <div style="color:{chg_col};font-size:0.85em;font-weight:600">{escape(chg_str)} (24h)</div>
+    </div>
+    <button onclick="window.location.reload()" style="background:#21262d;border:1px solid #30363d;color:#8b949e;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:0.82em">&#8635; Yenile</button>
+  </div>
+
+  <!-- STATS BAR -->
+  <div class="panel" style="padding:16px 24px;margin-bottom:20px">
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
+      <div>
+        <div class="stitle" style="margin-bottom:4px">EMA50</div>
+        <div style="font-family:monospace;color:#e6edf3">{escape(fmt_price(sym, ema50))}
+          <span style="color:{'#10b981' if ema_pct>=0 else '#ef4444'};font-size:0.82em;margin-left:6px">{ema_pct:+.2f}%</span>
+        </div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">RSI(14)</div>
+        <div style="font-weight:700;color:{'#ef4444' if rsi14>70 else '#10b981' if rsi14<30 else '#e6edf3'}">{rsi14:.1f}</div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">Volume</div>
+        <div style="color:#e6edf3">{escape(vol)}</div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">Biases</div>
+        <div style="font-size:0.85em;color:#e6edf3">15m: {escape(tf_b.get("15m","—"))} &nbsp; 1h: {escape(tf_b.get("1h","—"))} &nbsp; 4h: {escape(tf_b.get("4h","—"))}</div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">Consensus</div>
+        <span style="background:{cons_col}22;color:{cons_col};border:1px solid {cons_col}55;padding:3px 10px;border-radius:999px;font-size:0.78em;font-weight:600">{escape(cons)}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="stitle" style="margin-bottom:0">Mum Grafiği</div>
+      <div style="display:flex;gap:8px">
+        <button class="tf-btn active" onclick="switchTF('15m',this)">15m</button>
+        <button class="tf-btn" onclick="switchTF('1h',this)">1h</button>
+        <button class="tf-btn" onclick="switchTF('4h',this)">4h</button>
+      </div>
+    </div>
+    <div id="chart-container" style="height:420px;position:relative"></div>
+    <div id="chart-error" style="display:none;color:#ef4444;font-size:0.85em;margin-top:8px"></div>
+  </div>
+
+  <!-- ACTIVE SETUPS -->
+  <div class="panel">
+    <div class="stitle">Aktif Setuplar</div>
+    {active_html}
+  </div>
+
+  <!-- SETUP GEÇMİŞİ -->
+  <div class="panel">
+    <div class="stitle">Setup Geçmişi (son 50)</div>
+    {closed_html}
+  </div>
+
+  <!-- FOOTER -->
+  <div style="text-align:center;color:#374151;font-size:0.75em;padding:20px 0">
+    <a href="../index.html" style="color:#374151;text-decoration:none">&#8592; Ana Dashboard</a>
+  </div>
+
+  <script>
+    const SYMBOL   = '{sym}';
+    const BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
+    const setups   = {sets_json};
+
+    const container = document.getElementById('chart-container');
+    const chart = LightweightCharts.createChart(container, {{
+      width:  container.clientWidth,
+      height: 420,
+      layout: {{ background: {{ color: '#0d1117' }}, textColor: '#e5e7eb' }},
+      grid:   {{ vertLines: {{ color: '#1f2937' }}, horzLines: {{ color: '#1f2937' }} }},
+      crosshair: {{ mode: LightweightCharts.CrosshairMode.Normal }},
+      rightPriceScale: {{ borderColor: '#374151' }},
+      timeScale: {{ borderColor: '#374151', timeVisible: true }},
+    }});
+
+    const candleSeries = chart.addCandlestickSeries({{
+      upColor:'#10b981', downColor:'#ef4444',
+      borderUpColor:'#10b981', borderDownColor:'#ef4444',
+      wickUpColor:'#10b981', wickDownColor:'#ef4444',
+    }});
+
+    const volumeSeries = chart.addHistogramSeries({{
+      priceFormat: {{ type: 'volume' }},
+      priceScaleId: 'vol',
+    }});
+    chart.priceScale('vol').applyOptions({{ scaleMargins: {{ top: 0.8, bottom: 0 }} }});
+
+    let priceLines = [];
+    function drawSetupLines() {{
+      priceLines.forEach(function(pl) {{ candleSeries.removePriceLine(pl); }});
+      priceLines = [];
+      setups.forEach(function(s) {{
+        var isActive = s.status === 'active';
+        var lw  = isActive ? 2 : 1;
+        var sfx = s.status === 'win' ? ' ✅' : s.status === 'loss' ? ' ❌' : s.status === 'timeout' ? ' ⏱' : '';
+        var a   = isActive ? 1 : 0.35;
+        function rgba(r,g,b) {{ return 'rgba('+r+','+g+','+b+','+a+')'; }}
+        priceLines.push(
+          candleSeries.createPriceLine({{ price: s.entry,  color: rgba(251,146,60), lineWidth:lw, lineStyle:0, axisLabelVisible:true, title:'ENTRY'+sfx }}),
+          candleSeries.createPriceLine({{ price: s.stop,   color: rgba(239,68,68),  lineWidth:lw, lineStyle:2, axisLabelVisible:true, title:'SL'+sfx }}),
+          candleSeries.createPriceLine({{ price: s.target, color: rgba(16,185,129), lineWidth:lw, lineStyle:2, axisLabelVisible:true, title:'TP'+sfx }})
+        );
+      }});
+    }}
+
+    async function fetchAndRender(interval) {{
+      document.getElementById('chart-error').style.display = 'none';
+      try {{
+        var resp = await fetch(BASE_URL + '?symbol=' + SYMBOL + '&interval=' + interval + '&limit=100');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        var candles = data.map(function(k) {{ return {{ time: k[0]/1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }}; }});
+        var volumes = data.map(function(k) {{ return {{ time: k[0]/1000, value: +k[5], color: +k[4] >= +k[1] ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)' }}; }});
+        candleSeries.setData(candles);
+        volumeSeries.setData(volumes);
+        chart.timeScale().fitContent();
+        drawSetupLines();
+        var last = candles[candles.length - 1];
+        if (last) document.getElementById('live-price').textContent = '$' + last.close.toLocaleString(undefined, {{minimumFractionDigits:2, maximumFractionDigits:6}});
+      }} catch(e) {{
+        var errEl = document.getElementById('chart-error');
+        errEl.style.display = 'block';
+        errEl.textContent = 'Veri yuklenemedi: ' + e.message;
+      }}
+    }}
+
+    function switchTF(interval, btn) {{
+      document.querySelectorAll('.tf-btn').forEach(function(b) {{ b.classList.remove('active'); }});
+      btn.classList.add('active');
+      fetchAndRender(interval);
+    }}
+
+    window.addEventListener('resize', function() {{ chart.applyOptions({{ width: container.clientWidth }}); }});
+    fetchAndRender('15m');
+  </script>
+</body>
+</html>"""
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -286,7 +528,8 @@ def main():
             chg_h = pct_html(chg) if chg is not None else '<span style="color:#374151">—</span>'
             coin_rows += (
                 f'<tr class="trow"><td style="padding:10px 12px;white-space:nowrap">'
-                f'<span style="font-weight:700;color:#e6edf3">{coin(sym)}</span>'
+                f'<a href="coin/{sym}.html" style="font-weight:700;color:#e6edf3;text-decoration:none;transition:color 0.15s"'
+                f' onmouseover="this.style.color=\'#58a6ff\'" onmouseout="this.style.color=\'#e6edf3\'">{coin(sym)}</a>'
                 f'<span style="color:#374151;font-size:0.7em;margin-left:6px">{escape(cat)}</span></td>'
                 f'<td style="padding:10px 12px;font-family:monospace;color:#c9d1d9">{escape(fmt_price(sym, price))}</td>'
                 f'<td style="padding:10px 12px">{pct_html(e_pct)}</td>'
@@ -572,6 +815,16 @@ def main():
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[build_dashboard] docs/index.html yazıldı ({len(html):,} karakter)")
+
+    # ── Coin detail pages ─────────────────────────────────────────────────────
+    coin_dir = os.path.join(os.path.dirname(OUTPUT_FILE), "coin")
+    os.makedirs(coin_dir, exist_ok=True)
+    for sym in ALL_SYMBOLS:
+        sym_setups = [s for s in setups if s.get("symbol") == sym]
+        page = coin_page_html(sym, latest.get(sym), sym_setups, changes_24h)
+        with open(os.path.join(coin_dir, f"{sym}.html"), "w", encoding="utf-8") as f:
+            f.write(page)
+    print(f"[build_dashboard] {len(ALL_SYMBOLS)} coin detay sayfası yazıldı → docs/coin/")
 
 
 if __name__ == "__main__":

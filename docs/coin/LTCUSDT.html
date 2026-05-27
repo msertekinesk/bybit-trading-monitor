@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>LTC — Bybit Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    * { box-sizing:border-box; }
+    body { background:#0d1117; color:#e6edf3; font-family:system-ui,-apple-system,sans-serif; margin:0; }
+    .panel { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:24px; margin-bottom:20px; }
+    .stitle { color:#8b949e; font-size:0.72em; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:16px; }
+    table { width:100%; border-collapse:collapse; }
+    .trow:hover { background:rgba(255,255,255,0.025); }
+    .tf-btn { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px;
+               padding:5px 14px; cursor:pointer; font-size:0.82em; transition:all 0.15s; }
+    .tf-btn.active { background:#1d4ed8; border-color:#3b82f6; color:#fff; }
+    .tf-btn:hover:not(.active) { border-color:#58a6ff; color:#58a6ff; }
+  </style>
+</head>
+<body style="min-height:100vh;padding:24px;max-width:1200px;margin:0 auto">
+
+  <!-- HEADER -->
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid #21262d;flex-wrap:wrap">
+    <a href="../index.html" style="color:#64748b;text-decoration:none;font-size:0.85em;white-space:nowrap">&#8592; Dashboard</a>
+    <h1 style="flex:1;font-size:1.8em;font-weight:800;color:#e6edf3;margin:0">
+      LTC<span style="font-size:0.5em;color:#64748b;font-weight:400;margin-left:6px">USDT</span>
+    </h1>
+    <div style="text-align:right">
+      <div id="live-price" style="font-size:1.4em;font-weight:700;color:#e6edf3;font-family:monospace">$51.98</div>
+      <div style="color:#ef4444;font-size:0.85em;font-weight:600">-1.44% (24h)</div>
+    </div>
+    <button onclick="window.location.reload()" style="background:#21262d;border:1px solid #30363d;color:#8b949e;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:0.82em">&#8635; Yenile</button>
+  </div>
+
+  <!-- STATS BAR -->
+  <div class="panel" style="padding:16px 24px;margin-bottom:20px">
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
+      <div>
+        <div class="stitle" style="margin-bottom:4px">EMA50</div>
+        <div style="font-family:monospace;color:#e6edf3">$52.15
+          <span style="color:#ef4444;font-size:0.82em;margin-left:6px">-0.32%</span>
+        </div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">RSI(14)</div>
+        <div style="font-weight:700;color:#e6edf3">46.9</div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">Volume</div>
+        <div style="color:#e6edf3">NORMAL VOL</div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">Biases</div>
+        <div style="font-size:0.85em;color:#e6edf3">15m: bearish &nbsp; 1h: bearish &nbsp; 4h: bearish</div>
+      </div>
+      <div>
+        <div class="stitle" style="margin-bottom:4px">Consensus</div>
+        <span style="background:#dc262622;color:#dc2626;border:1px solid #dc262655;padding:3px 10px;border-radius:999px;font-size:0.78em;font-weight:600">STRONG BEARISH</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="stitle" style="margin-bottom:0">Mum Grafiği</div>
+      <div style="display:flex;gap:8px">
+        <button class="tf-btn active" onclick="switchTF('15m',this)">15m</button>
+        <button class="tf-btn" onclick="switchTF('1h',this)">1h</button>
+        <button class="tf-btn" onclick="switchTF('4h',this)">4h</button>
+      </div>
+    </div>
+    <div id="chart-container" style="height:420px;position:relative"></div>
+    <div id="chart-error" style="display:none;color:#ef4444;font-size:0.85em;margin-top:8px"></div>
+  </div>
+
+  <!-- ACTIVE SETUPS -->
+  <div class="panel">
+    <div class="stitle">Aktif Setuplar</div>
+    <p style="color:#374151;font-style:italic;padding:8px 0">Aktif setup yok.</p>
+  </div>
+
+  <!-- SETUP GEÇMİŞİ -->
+  <div class="panel">
+    <div class="stitle">Setup Geçmişi (son 50)</div>
+    <p style="color:#374151;font-style:italic;padding:8px 0">Henüz tamamlanmış setup yok.</p>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="text-align:center;color:#374151;font-size:0.75em;padding:20px 0">
+    <a href="../index.html" style="color:#374151;text-decoration:none">&#8592; Ana Dashboard</a>
+  </div>
+
+  <script>
+    const SYMBOL   = 'LTCUSDT';
+    const BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
+    const setups   = [];
+
+    const container = document.getElementById('chart-container');
+    const chart = LightweightCharts.createChart(container, {
+      width:  container.clientWidth,
+      height: 420,
+      layout: { background: { color: '#0d1117' }, textColor: '#e5e7eb' },
+      grid:   { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#374151' },
+      timeScale: { borderColor: '#374151', timeVisible: true },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor:'#10b981', downColor:'#ef4444',
+      borderUpColor:'#10b981', borderDownColor:'#ef4444',
+      wickUpColor:'#10b981', wickDownColor:'#ef4444',
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+    });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+
+    let priceLines = [];
+    function drawSetupLines() {
+      priceLines.forEach(function(pl) { candleSeries.removePriceLine(pl); });
+      priceLines = [];
+      setups.forEach(function(s) {
+        var isActive = s.status === 'active';
+        var lw  = isActive ? 2 : 1;
+        var sfx = s.status === 'win' ? ' ✅' : s.status === 'loss' ? ' ❌' : s.status === 'timeout' ? ' ⏱' : '';
+        var a   = isActive ? 1 : 0.35;
+        function rgba(r,g,b) { return 'rgba('+r+','+g+','+b+','+a+')'; }
+        priceLines.push(
+          candleSeries.createPriceLine({ price: s.entry,  color: rgba(251,146,60), lineWidth:lw, lineStyle:0, axisLabelVisible:true, title:'ENTRY'+sfx }),
+          candleSeries.createPriceLine({ price: s.stop,   color: rgba(239,68,68),  lineWidth:lw, lineStyle:2, axisLabelVisible:true, title:'SL'+sfx }),
+          candleSeries.createPriceLine({ price: s.target, color: rgba(16,185,129), lineWidth:lw, lineStyle:2, axisLabelVisible:true, title:'TP'+sfx })
+        );
+      });
+    }
+
+    async function fetchAndRender(interval) {
+      document.getElementById('chart-error').style.display = 'none';
+      try {
+        var resp = await fetch(BASE_URL + '?symbol=' + SYMBOL + '&interval=' + interval + '&limit=100');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        var candles = data.map(function(k) { return { time: k[0]/1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }; });
+        var volumes = data.map(function(k) { return { time: k[0]/1000, value: +k[5], color: +k[4] >= +k[1] ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)' }; });
+        candleSeries.setData(candles);
+        volumeSeries.setData(volumes);
+        chart.timeScale().fitContent();
+        drawSetupLines();
+        var last = candles[candles.length - 1];
+        if (last) document.getElementById('live-price').textContent = '$' + last.close.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
+      } catch(e) {
+        var errEl = document.getElementById('chart-error');
+        errEl.style.display = 'block';
+        errEl.textContent = 'Veri yuklenemedi: ' + e.message;
+      }
+    }
+
+    function switchTF(interval, btn) {
+      document.querySelectorAll('.tf-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      fetchAndRender(interval);
+    }
+
+    window.addEventListener('resize', function() { chart.applyOptions({ width: container.clientWidth }); });
+    fetchAndRender('15m');
+  </script>
+</body>
+</html>
