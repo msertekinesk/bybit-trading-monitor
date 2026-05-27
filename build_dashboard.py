@@ -117,6 +117,8 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
     cons_col = CONSENSUS_COLORS.get(cons, "#64748b")
     now_utc  = datetime.now(timezone.utc)
     sets_json = json.dumps(sym_setups)
+    vp_data  = (stats.get("volume_profile") or {}) if stats else {}
+    vp_json  = json.dumps(vp_data)
 
     # Active setups table
     active = [s for s in sym_setups if s.get("status") == "active"]
@@ -174,7 +176,7 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>{cname} — Bybit Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'"></script>
   <style>
     * {{ box-sizing:border-box; }}
     body {{ background:#0d1117; color:#e6edf3; font-family:system-ui,-apple-system,sans-serif; margin:0; }}
@@ -245,6 +247,19 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
     <div id="chart-error" style="display:none;color:#ef4444;font-size:0.85em;margin-top:8px"></div>
   </div>
 
+  <!-- VOLUME PROFILE -->
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="stitle" style="margin-bottom:0">Volume Profile <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.9em;color:#4b5563">(son 100 mum)</span></div>
+      <div style="font-size:0.72em;color:#64748b">
+        POC: <span id="vp-poc-label" style="color:#fbbf24;font-family:monospace">—</span>
+        &nbsp;|&nbsp; VAL: <span id="vp-val-label" style="color:#94a3b8;font-family:monospace">—</span>
+        &nbsp;|&nbsp; VAH: <span id="vp-vah-label" style="color:#94a3b8;font-family:monospace">—</span>
+      </div>
+    </div>
+    <div id="vp-histogram"></div>
+  </div>
+
   <!-- ACTIVE SETUPS -->
   <div class="panel">
     <div class="stitle">Aktif Setuplar</div>
@@ -266,6 +281,12 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
     var SYMBOL   = '{sym}';
     var BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
     var setupData = {sets_json};
+    var VP_DATA  = {vp_json};
+
+    if (typeof LightweightCharts === 'undefined') {{
+      document.getElementById('chart-container').innerHTML = '<div style="padding:20px;color:#ef4444;font-size:0.9em">Chart library yuklenemedi. Sayfayi yenileyin.</div>';
+      return;
+    }}
 
     var container = document.getElementById('chart-container');
     var chart = LightweightCharts.createChart(container, {{
@@ -296,6 +317,11 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
         try {{ candleSeries.removePriceLine(priceLines[i]); }} catch(e) {{}}
       }}
       priceLines = [];
+      if (VP_DATA.poc && VP_DATA.poc > 0) {{
+        priceLines.push(candleSeries.createPriceLine({{ price: VP_DATA.poc, color: 'rgba(251,191,36,0.9)', lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: 'POC' }}));
+        if (VP_DATA.val) priceLines.push(candleSeries.createPriceLine({{ price: VP_DATA.val, color: 'rgba(100,116,139,0.65)', lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: 'VAL' }}));
+        if (VP_DATA.vah) priceLines.push(candleSeries.createPriceLine({{ price: VP_DATA.vah, color: 'rgba(100,116,139,0.65)', lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: 'VAH' }}));
+      }}
       for (var j = 0; j < setupData.length; j++) {{
         var s = setupData[j];
         var isActive = s.status === 'active';
@@ -309,6 +335,65 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
         priceLines.push(candleSeries.createPriceLine({{ price: s.stop,   color: cStop,   lineWidth: lw, lineStyle: 2, axisLabelVisible: true, title: 'SL'    + sfx }}));
         priceLines.push(candleSeries.createPriceLine({{ price: s.target, color: cTarget, lineWidth: lw, lineStyle: 2, axisLabelVisible: true, title: 'TP'    + sfx }}));
       }}
+    }}
+
+    function fmtBinPrice(p) {{
+      if (p >= 1000) return '$' + p.toFixed(0);
+      if (p >= 10)   return '$' + p.toFixed(2);
+      if (p >= 1)    return '$' + p.toFixed(3);
+      if (p >= 0.1)  return '$' + p.toFixed(4);
+      return '$' + p.toFixed(5);
+    }}
+
+    function renderVPHistogram(rawData) {{
+      var NUM_BINS = 24;
+      var container = document.getElementById('vp-histogram');
+      if (!container || !rawData || rawData.length === 0) return;
+      var minP = Infinity, maxP = -Infinity;
+      for (var i = 0; i < rawData.length; i++) {{
+        if (rawData[i].low  < minP) minP = rawData[i].low;
+        if (rawData[i].high > maxP) maxP = rawData[i].high;
+      }}
+      if (maxP <= minP) return;
+      var binSize = (maxP - minP) / NUM_BINS;
+      var bins = [];
+      for (var b = 0; b < NUM_BINS; b++) {{
+        bins.push({{ priceLo: minP + b * binSize, priceHi: minP + (b+1) * binSize, vol: 0 }});
+      }}
+      for (var i = 0; i < rawData.length; i++) {{
+        var lo = rawData[i].low, hi = rawData[i].high, v = rawData[i].vol;
+        var range = hi - lo; if (range <= 0) range = binSize;
+        for (var b = 0; b < NUM_BINS; b++) {{
+          var overlap = Math.min(bins[b].priceHi, hi) - Math.max(bins[b].priceLo, lo);
+          if (overlap > 0) bins[b].vol += v * (overlap / range);
+        }}
+      }}
+      var maxVol = 0;
+      for (var b = 0; b < NUM_BINS; b++) {{ if (bins[b].vol > maxVol) maxVol = bins[b].vol; }}
+      if (maxVol === 0) return;
+
+      var pocP = VP_DATA.poc || 0, valP = VP_DATA.val || 0, vahP = VP_DATA.vah || 0;
+      if (pocP > 0) {{
+        document.getElementById('vp-poc-label').textContent = fmtBinPrice(pocP);
+        document.getElementById('vp-val-label').textContent = fmtBinPrice(valP);
+        document.getElementById('vp-vah-label').textContent = fmtBinPrice(vahP);
+      }}
+
+      var html = '<div style="display:flex;flex-direction:column-reverse;gap:1px">';
+      for (var b = 0; b < NUM_BINS; b++) {{
+        var pct    = bins[b].vol / maxVol * 100;
+        var midP   = (bins[b].priceLo + bins[b].priceHi) / 2;
+        var isPoc  = pocP > 0 && bins[b].priceLo <= pocP && pocP < bins[b].priceHi;
+        var inVA   = vahP > 0 && valP > 0 && midP >= valP && midP <= vahP;
+        var barCol = isPoc ? '#fbbf24' : (inVA ? 'rgba(99,102,241,0.55)' : 'rgba(100,116,139,0.4)');
+        html += '<div style="display:flex;align-items:center;gap:6px;height:13px">';
+        html += '<div style="width:72px;text-align:right;font-size:0.58em;color:#4b5563;font-family:monospace;flex-shrink:0">' + fmtBinPrice(midP) + '</div>';
+        html += '<div style="flex:1;height:9px;background:#1e2530;border-radius:2px">';
+        html += '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + barCol + ';border-radius:2px;transition:width 0.4s ease"></div>';
+        html += '</div></div>';
+      }}
+      html += '</div>';
+      container.innerHTML = html;
     }}
 
     function fetchAndRender(interval) {{
@@ -325,6 +410,8 @@ def coin_page_html(sym, stats, sym_setups, changes_24h):
           volumeSeries.setData(volumes);
           chart.timeScale().fitContent();
           drawSetupLines();
+          var rawForVP = data.map(function(k) {{ return {{ low: +k[3], high: +k[2], vol: +k[5] }}; }});
+          renderVPHistogram(rawForVP);
           var last = candles[candles.length - 1];
           if (last) document.getElementById('live-price').textContent = '$' + last.close.toLocaleString(undefined, {{minimumFractionDigits:2, maximumFractionDigits:6}});
         }})
@@ -531,11 +618,18 @@ def main():
             chg   = changes_24h.get(sym)
             rc    = "#ef4444" if rsi > 70 else ("#10b981" if rsi < 30 else "#c9d1d9")
             rfw   = "700" if (rsi > 70 or rsi < 30) else "400"
-            chg_h = pct_html(chg) if chg is not None else '<span style="color:#374151">—</span>'
+            chg_h  = pct_html(chg) if chg is not None else '<span style="color:#374151">—</span>'
+            vp     = r.get("volume_profile") or {}
+            ls     = r.get("liquidity_sweep") or {}
+            poc    = vp.get("poc", 0)
+            poc_pct = (price - poc) / poc * 100 if poc > 0 else None
+            poc_h  = pct_html(poc_pct) if poc_pct is not None else '<span style="color:#374151">—</span>'
+            sweep_icon = '<span title="Liquidity sweep tespit edildi" style="color:#f59e0b;margin-left:4px;font-size:0.85em">&#9889;</span>' if ls.get("detected") else ""
             coin_rows += (
                 f'<tr class="trow"><td style="padding:10px 12px;white-space:nowrap">'
                 f'<a href="coin/{sym}.html" style="font-weight:700;color:#e6edf3;text-decoration:none;transition:color 0.15s"'
                 f' onmouseover="this.style.color=\'#58a6ff\'" onmouseout="this.style.color=\'#e6edf3\'">{coin(sym)}</a>'
+                f'{sweep_icon}'
                 f'<span style="color:#374151;font-size:0.7em;margin-left:6px">{escape(cat)}</span></td>'
                 f'<td style="padding:10px 12px;font-family:monospace;color:#c9d1d9">{escape(fmt_price(sym, price))}</td>'
                 f'<td style="padding:10px 12px">{pct_html(e_pct)}</td>'
@@ -545,7 +639,8 @@ def main():
                 f'<td style="text-align:center;padding:10px 8px">{bias_badge(tf.get("4h",""))}</td>'
                 f'<td style="padding:10px 12px">{consensus_badge(cons)}</td>'
                 f'<td style="padding:10px 12px">{vol_badge(vol)}</td>'
-                f'<td style="padding:10px 12px">{chg_h}</td></tr>'
+                f'<td style="padding:10px 12px">{chg_h}</td>'
+                f'<td style="padding:10px 12px">{poc_h}</td></tr>'
             )
 
     # ── Active setups ─────────────────────────────────────────────────────────
@@ -779,7 +874,7 @@ def main():
     <table>
       <thead>
         <tr style="border-bottom:1px solid #21262d">
-          {th(["SYMBOL","PRICE","EMA%","RSI","15m","1h","4h","CONSENSUS","VOL","24h%"])}
+          {th(["SYMBOL","PRICE","EMA%","RSI","15m","1h","4h","CONSENSUS","VOL","24h%","POC%"])}
         </tr>
       </thead>
       <tbody>{coin_rows}</tbody>

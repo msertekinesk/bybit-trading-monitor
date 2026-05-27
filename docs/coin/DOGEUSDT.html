@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>DOGE — Bybit Monitor</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js" onerror="this.onerror=null;this.src='https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js'"></script>
   <style>
     * { box-sizing:border-box; }
     body { background:#0d1117; color:#e6edf3; font-family:system-ui,-apple-system,sans-serif; margin:0; }
@@ -76,6 +76,19 @@
     <div id="chart-error" style="display:none;color:#ef4444;font-size:0.85em;margin-top:8px"></div>
   </div>
 
+  <!-- VOLUME PROFILE -->
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="stitle" style="margin-bottom:0">Volume Profile <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.9em;color:#4b5563">(son 100 mum)</span></div>
+      <div style="font-size:0.72em;color:#64748b">
+        POC: <span id="vp-poc-label" style="color:#fbbf24;font-family:monospace">—</span>
+        &nbsp;|&nbsp; VAL: <span id="vp-val-label" style="color:#94a3b8;font-family:monospace">—</span>
+        &nbsp;|&nbsp; VAH: <span id="vp-vah-label" style="color:#94a3b8;font-family:monospace">—</span>
+      </div>
+    </div>
+    <div id="vp-histogram"></div>
+  </div>
+
   <!-- ACTIVE SETUPS -->
   <div class="panel">
     <div class="stitle">Aktif Setuplar</div>
@@ -97,6 +110,12 @@
     var SYMBOL   = 'DOGEUSDT';
     var BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
     var setupData = [];
+    var VP_DATA  = {};
+
+    if (typeof LightweightCharts === 'undefined') {
+      document.getElementById('chart-container').innerHTML = '<div style="padding:20px;color:#ef4444;font-size:0.9em">Chart library yuklenemedi. Sayfayi yenileyin.</div>';
+      return;
+    }
 
     var container = document.getElementById('chart-container');
     var chart = LightweightCharts.createChart(container, {
@@ -127,6 +146,11 @@
         try { candleSeries.removePriceLine(priceLines[i]); } catch(e) {}
       }
       priceLines = [];
+      if (VP_DATA.poc && VP_DATA.poc > 0) {
+        priceLines.push(candleSeries.createPriceLine({ price: VP_DATA.poc, color: 'rgba(251,191,36,0.9)', lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: 'POC' }));
+        if (VP_DATA.val) priceLines.push(candleSeries.createPriceLine({ price: VP_DATA.val, color: 'rgba(100,116,139,0.65)', lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: 'VAL' }));
+        if (VP_DATA.vah) priceLines.push(candleSeries.createPriceLine({ price: VP_DATA.vah, color: 'rgba(100,116,139,0.65)', lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: 'VAH' }));
+      }
       for (var j = 0; j < setupData.length; j++) {
         var s = setupData[j];
         var isActive = s.status === 'active';
@@ -140,6 +164,65 @@
         priceLines.push(candleSeries.createPriceLine({ price: s.stop,   color: cStop,   lineWidth: lw, lineStyle: 2, axisLabelVisible: true, title: 'SL'    + sfx }));
         priceLines.push(candleSeries.createPriceLine({ price: s.target, color: cTarget, lineWidth: lw, lineStyle: 2, axisLabelVisible: true, title: 'TP'    + sfx }));
       }
+    }
+
+    function fmtBinPrice(p) {
+      if (p >= 1000) return '$' + p.toFixed(0);
+      if (p >= 10)   return '$' + p.toFixed(2);
+      if (p >= 1)    return '$' + p.toFixed(3);
+      if (p >= 0.1)  return '$' + p.toFixed(4);
+      return '$' + p.toFixed(5);
+    }
+
+    function renderVPHistogram(rawData) {
+      var NUM_BINS = 24;
+      var container = document.getElementById('vp-histogram');
+      if (!container || !rawData || rawData.length === 0) return;
+      var minP = Infinity, maxP = -Infinity;
+      for (var i = 0; i < rawData.length; i++) {
+        if (rawData[i].low  < minP) minP = rawData[i].low;
+        if (rawData[i].high > maxP) maxP = rawData[i].high;
+      }
+      if (maxP <= minP) return;
+      var binSize = (maxP - minP) / NUM_BINS;
+      var bins = [];
+      for (var b = 0; b < NUM_BINS; b++) {
+        bins.push({ priceLo: minP + b * binSize, priceHi: minP + (b+1) * binSize, vol: 0 });
+      }
+      for (var i = 0; i < rawData.length; i++) {
+        var lo = rawData[i].low, hi = rawData[i].high, v = rawData[i].vol;
+        var range = hi - lo; if (range <= 0) range = binSize;
+        for (var b = 0; b < NUM_BINS; b++) {
+          var overlap = Math.min(bins[b].priceHi, hi) - Math.max(bins[b].priceLo, lo);
+          if (overlap > 0) bins[b].vol += v * (overlap / range);
+        }
+      }
+      var maxVol = 0;
+      for (var b = 0; b < NUM_BINS; b++) { if (bins[b].vol > maxVol) maxVol = bins[b].vol; }
+      if (maxVol === 0) return;
+
+      var pocP = VP_DATA.poc || 0, valP = VP_DATA.val || 0, vahP = VP_DATA.vah || 0;
+      if (pocP > 0) {
+        document.getElementById('vp-poc-label').textContent = fmtBinPrice(pocP);
+        document.getElementById('vp-val-label').textContent = fmtBinPrice(valP);
+        document.getElementById('vp-vah-label').textContent = fmtBinPrice(vahP);
+      }
+
+      var html = '<div style="display:flex;flex-direction:column-reverse;gap:1px">';
+      for (var b = 0; b < NUM_BINS; b++) {
+        var pct    = bins[b].vol / maxVol * 100;
+        var midP   = (bins[b].priceLo + bins[b].priceHi) / 2;
+        var isPoc  = pocP > 0 && bins[b].priceLo <= pocP && pocP < bins[b].priceHi;
+        var inVA   = vahP > 0 && valP > 0 && midP >= valP && midP <= vahP;
+        var barCol = isPoc ? '#fbbf24' : (inVA ? 'rgba(99,102,241,0.55)' : 'rgba(100,116,139,0.4)');
+        html += '<div style="display:flex;align-items:center;gap:6px;height:13px">';
+        html += '<div style="width:72px;text-align:right;font-size:0.58em;color:#4b5563;font-family:monospace;flex-shrink:0">' + fmtBinPrice(midP) + '</div>';
+        html += '<div style="flex:1;height:9px;background:#1e2530;border-radius:2px">';
+        html += '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + barCol + ';border-radius:2px;transition:width 0.4s ease"></div>';
+        html += '</div></div>';
+      }
+      html += '</div>';
+      container.innerHTML = html;
     }
 
     function fetchAndRender(interval) {
@@ -156,6 +239,8 @@
           volumeSeries.setData(volumes);
           chart.timeScale().fitContent();
           drawSetupLines();
+          var rawForVP = data.map(function(k) { return { low: +k[3], high: +k[2], vol: +k[5] }; });
+          renderVPHistogram(rawForVP);
           var last = candles[candles.length - 1];
           if (last) document.getElementById('live-price').textContent = '$' + last.close.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
         })

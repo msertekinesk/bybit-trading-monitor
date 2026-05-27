@@ -177,6 +177,74 @@ def detect_setup(symbol, price, tf_biases, consensus, volume_signal_str, df_15m,
     }
 
 
+# ── Volume Profile ───────────────────────────────────────────────────────────
+def calculate_volume_profile(df, num_bins=40):
+    price_min = float(df["low"].min())
+    price_max = float(df["high"].max())
+    if price_max <= price_min:
+        return {"poc": price_min, "val": price_min, "vah": price_max}
+    bin_size = (price_max - price_min) / num_bins
+    bins = [0.0] * num_bins
+    for _, row in df.iterrows():
+        lo = max(0, min(num_bins - 1, int((row["low"]  - price_min) / bin_size)))
+        hi = max(0, min(num_bins - 1, int((row["high"] - price_min) / bin_size)))
+        n = hi - lo + 1
+        vol_each = row["volume"] / n
+        for i in range(lo, hi + 1):
+            bins[i] += vol_each
+    poc_idx   = max(range(num_bins), key=lambda i: bins[i])
+    poc_price = price_min + (poc_idx + 0.5) * bin_size
+    total_vol = sum(bins)
+    target    = total_vol * 0.70
+    accumulated = bins[poc_idx]
+    lo_ext = hi_ext = poc_idx
+    while accumulated < target and (lo_ext > 0 or hi_ext < num_bins - 1):
+        up = bins[hi_ext + 1] if hi_ext + 1 < num_bins else 0
+        dn = bins[lo_ext - 1] if lo_ext - 1 >= 0 else 0
+        if up >= dn and hi_ext + 1 < num_bins:
+            hi_ext += 1; accumulated += up
+        elif lo_ext - 1 >= 0:
+            lo_ext -= 1; accumulated += dn
+        else:
+            break
+    return {
+        "poc": round(poc_price, 6),
+        "val": round(price_min + lo_ext * bin_size, 6),
+        "vah": round(price_min + (hi_ext + 1) * bin_size, 6),
+    }
+
+
+# ── Liquidity Sweep ───────────────────────────────────────────────────────────
+def detect_liquidity_sweep(df, lookback=20):
+    if len(df) < lookback + 3:
+        return {"detected": False}
+    recent    = df.iloc[-(lookback + 3):-3]
+    swing_hi  = float(recent["high"].max())
+    swing_lo  = float(recent["low"].min())
+    last_3    = df.iloc[-3:]
+    avg_vol   = float(df["volume"].iloc[-23:-3].mean()) if len(df) >= 23 else float(df["volume"].mean())
+    if avg_vol == 0:
+        return {"detected": False}
+    for _, row in last_3.iterrows():
+        hi, lo, cl, vol = float(row["high"]), float(row["low"]), float(row["close"]), float(row["volume"])
+        span = hi - lo
+        if span <= 0:
+            continue
+        # Bullish sweep: wick below swing low, close back above
+        if lo < swing_lo and cl > swing_lo and vol >= avg_vol * 1.3:
+            rej = (cl - lo) / span
+            if rej > 0.5:
+                return {"detected": True, "type": "bullish_sweep",
+                        "sweep_level": round(swing_lo, 6), "rejection_strength": round(rej, 2)}
+        # Bearish sweep: wick above swing high, close back below
+        if hi > swing_hi and cl < swing_hi and vol >= avg_vol * 1.3:
+            rej = (hi - cl) / span
+            if rej > 0.5:
+                return {"detected": True, "type": "bearish_sweep",
+                        "sweep_level": round(swing_hi, 6), "rejection_strength": round(rej, 2)}
+    return {"detected": False}
+
+
 # ── Formatting ────────────────────────────────────────────────────────────────
 def fmt_price(symbol: str, price: float) -> str:
     if symbol in ("BTCUSDT",):
@@ -287,21 +355,33 @@ def main():
             ema50_15     = calc_ema50(df_15["close"])
             pct_diff     = (price - ema50_15) / ema50_15 * 100
 
-            setup = detect_setup(symbol, price, tf_biases, consensus, vol_signal, df_15, rsi_15m=tf_rsi["15m"])
+            setup       = detect_setup(symbol, price, tf_biases, consensus, vol_signal, df_15, rsi_15m=tf_rsi["15m"])
+            vol_profile = calculate_volume_profile(df_15)
+            liq_sweep   = detect_liquidity_sweep(df_15)
+
+            # Liquidity sweep confirms setup direction → add to trigger_reasons
+            if setup and liq_sweep.get("detected"):
+                sweep_dir = "bullish" if liq_sweep["type"] == "bullish_sweep" else "bearish"
+                setup_dir = "bullish" if setup["direction"] == "LONG" else "bearish"
+                if sweep_dir == setup_dir:
+                    setup["trigger_reasons"].append(f"Liquidity sweep ({sweep_dir})")
 
             results_by_symbol[symbol] = {
-                "symbol":        symbol,
-                "price":         price,
-                "ema50":         ema50_15,
-                "pct_diff":      pct_diff,
-                "rsi14":         tf_rsi["15m"],
-                "tf_biases":     tf_biases,
-                "consensus":     consensus,
-                "volume_signal": vol_signal,
-                "setup":         setup,
+                "symbol":         symbol,
+                "price":          price,
+                "ema50":          ema50_15,
+                "pct_diff":       pct_diff,
+                "rsi14":          tf_rsi["15m"],
+                "tf_biases":      tf_biases,
+                "consensus":      consensus,
+                "volume_signal":  vol_signal,
+                "setup":          setup,
+                "volume_profile": vol_profile,
+                "liquidity_sweep": liq_sweep,
             }
+            sweep_tag = "  SWEEP" if liq_sweep.get("detected") else ""
             setup_tag = f"  SETUP={setup['direction']}" if setup else ""
-            print(f"  {tf_biases}  consensus={consensus}  vol={vol_signal}{setup_tag}")
+            print(f"  {tf_biases}  consensus={consensus}  vol={vol_signal}{setup_tag}{sweep_tag}")
 
         except Exception as e:
             print(f"  [ERR] {symbol}: {e}")
@@ -330,6 +410,15 @@ def main():
                 f"  15m: {b['15m']:<8} 1h: {b['1h']:<8} 4h: {b['4h']:<8} → {r['consensus']}"
             )
             lines.append(f"  RSI {r['rsi14']:.1f} | Volume: {r['volume_signal']}")
+            vp = r.get("volume_profile", {})
+            if vp:
+                lines.append(
+                    f"  POC: {fmt_price(sym, vp['poc'])} | VA: {fmt_price(sym, vp['val'])} - {fmt_price(sym, vp['vah'])}"
+                )
+            ls = r.get("liquidity_sweep", {})
+            if ls.get("detected"):
+                sw_type = "bullish" if ls["type"] == "bullish_sweep" else "bearish"
+                lines.append(f"  SWEEP: {sw_type} @ {fmt_price(sym, ls['sweep_level'])} (rej {ls['rejection_strength']:.0%})")
             if r["setup"]:
                 s = r["setup"]
                 lines.append(
@@ -391,7 +480,9 @@ def main():
                     f"({r['pct_diff']:+.2f}%), RSI {r['rsi14']:.1f}, "
                     f"consensus={r['consensus']}, vol={r['volume_signal']}."
                 ),
-                "setup": r["setup"],
+                "setup":          r["setup"],
+                "volume_profile": r.get("volume_profile"),
+                "liquidity_sweep": r.get("liquidity_sweep"),
                 "trade_plan": {"entry": None, "stop": None, "target": None, "rr": None},
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -471,6 +562,15 @@ def main():
                 f"  15m:{b['15m'][:4]}  1h:{b['1h'][:4]}  4h:{b['4h'][:4]}  → {r['consensus']}"
             )
             tg_lines.append(f"  RSI {r['rsi14']:.1f} | {r['volume_signal']}")
+            vp = r.get("volume_profile", {})
+            if vp:
+                tg_lines.append(
+                    f"  POC: <code>{fmt_price(sym, vp['poc'])}</code> | VA: {fmt_price(sym, vp['val'])} - {fmt_price(sym, vp['vah'])}"
+                )
+            ls = r.get("liquidity_sweep", {})
+            if ls and ls.get("detected"):
+                sw_type = "bullish" if ls["type"] == "bullish_sweep" else "bearish"
+                tg_lines.append(f"  SWEEP: {sw_type} @ {fmt_price(sym, ls['sweep_level'])}")
             if r["setup"]:
                 s = r["setup"]
                 tg_lines.append(
