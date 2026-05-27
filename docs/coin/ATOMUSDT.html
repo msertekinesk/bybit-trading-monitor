@@ -94,70 +94,76 @@
   </div>
 
   <script>
-    const SYMBOL   = 'ATOMUSDT';
-    const BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
-    const setups   = [];
+    var SYMBOL   = 'ATOMUSDT';
+    var BASE_URL = 'https://data-api.binance.vision/api/v3/klines';
+    var setupData = [];
 
-    const container = document.getElementById('chart-container');
-    const chart = LightweightCharts.createChart(container, {
+    var container = document.getElementById('chart-container');
+    var chart = LightweightCharts.createChart(container, {
       width:  container.clientWidth,
       height: 420,
       layout: { background: { color: '#0d1117' }, textColor: '#e5e7eb' },
       grid:   { vertLines: { color: '#1f2937' }, horzLines: { color: '#1f2937' } },
-      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#374151' },
       timeScale: { borderColor: '#374151', timeVisible: true },
     });
 
-    const candleSeries = chart.addCandlestickSeries({
+    var candleSeries = chart.addCandlestickSeries({
       upColor:'#10b981', downColor:'#ef4444',
       borderUpColor:'#10b981', borderDownColor:'#ef4444',
       wickUpColor:'#10b981', wickDownColor:'#ef4444',
     });
 
-    const volumeSeries = chart.addHistogramSeries({
+    var volumeSeries = chart.addHistogramSeries({
       priceFormat: { type: 'volume' },
       priceScaleId: 'vol',
     });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
-    let priceLines = [];
+    var priceLines = [];
+
     function drawSetupLines() {
-      priceLines.forEach(function(pl) { candleSeries.removePriceLine(pl); });
+      for (var i = 0; i < priceLines.length; i++) {
+        try { candleSeries.removePriceLine(priceLines[i]); } catch(e) {}
+      }
       priceLines = [];
-      setups.forEach(function(s) {
+      for (var j = 0; j < setupData.length; j++) {
+        var s = setupData[j];
         var isActive = s.status === 'active';
         var lw  = isActive ? 2 : 1;
-        var sfx = s.status === 'win' ? ' ✅' : s.status === 'loss' ? ' ❌' : s.status === 'timeout' ? ' ⏱' : '';
-        var a   = isActive ? 1 : 0.35;
-        function rgba(r,g,b) { return 'rgba('+r+','+g+','+b+','+a+')'; }
-        priceLines.push(
-          candleSeries.createPriceLine({ price: s.entry,  color: rgba(251,146,60), lineWidth:lw, lineStyle:0, axisLabelVisible:true, title:'ENTRY'+sfx }),
-          candleSeries.createPriceLine({ price: s.stop,   color: rgba(239,68,68),  lineWidth:lw, lineStyle:2, axisLabelVisible:true, title:'SL'+sfx }),
-          candleSeries.createPriceLine({ price: s.target, color: rgba(16,185,129), lineWidth:lw, lineStyle:2, axisLabelVisible:true, title:'TP'+sfx })
-        );
-      });
+        var sfx = s.status === 'win' ? ' WIN' : s.status === 'loss' ? ' LOSS' : s.status === 'timeout' ? ' TMOUT' : '';
+        var a   = isActive ? 1 : 0.4;
+        var cEntry  = 'rgba(251,146,60,'  + a + ')';
+        var cStop   = 'rgba(239,68,68,'   + a + ')';
+        var cTarget = 'rgba(16,185,129,'  + a + ')';
+        priceLines.push(candleSeries.createPriceLine({ price: s.entry,  color: cEntry,  lineWidth: lw, lineStyle: 0, axisLabelVisible: true, title: 'ENTRY' + sfx }));
+        priceLines.push(candleSeries.createPriceLine({ price: s.stop,   color: cStop,   lineWidth: lw, lineStyle: 2, axisLabelVisible: true, title: 'SL'    + sfx }));
+        priceLines.push(candleSeries.createPriceLine({ price: s.target, color: cTarget, lineWidth: lw, lineStyle: 2, axisLabelVisible: true, title: 'TP'    + sfx }));
+      }
     }
 
-    async function fetchAndRender(interval) {
+    function fetchAndRender(interval) {
       document.getElementById('chart-error').style.display = 'none';
-      try {
-        var resp = await fetch(BASE_URL + '?symbol=' + SYMBOL + '&interval=' + interval + '&limit=100');
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        var data = await resp.json();
-        var candles = data.map(function(k) { return { time: k[0]/1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }; });
-        var volumes = data.map(function(k) { return { time: k[0]/1000, value: +k[5], color: +k[4] >= +k[1] ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)' }; });
-        candleSeries.setData(candles);
-        volumeSeries.setData(volumes);
-        chart.timeScale().fitContent();
-        drawSetupLines();
-        var last = candles[candles.length - 1];
-        if (last) document.getElementById('live-price').textContent = '$' + last.close.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
-      } catch(e) {
-        var errEl = document.getElementById('chart-error');
-        errEl.style.display = 'block';
-        errEl.textContent = 'Veri yuklenemedi: ' + e.message;
-      }
+      fetch(BASE_URL + '?symbol=' + SYMBOL + '&interval=' + interval + '&limit=100')
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.json();
+        })
+        .then(function(data) {
+          var candles = data.map(function(k) { return { time: k[0]/1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }; });
+          var volumes = data.map(function(k) { return { time: k[0]/1000, value: +k[5], color: +k[4] >= +k[1] ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.35)' }; });
+          candleSeries.setData(candles);
+          volumeSeries.setData(volumes);
+          chart.timeScale().fitContent();
+          drawSetupLines();
+          var last = candles[candles.length - 1];
+          if (last) document.getElementById('live-price').textContent = '$' + last.close.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:6});
+        })
+        .catch(function(e) {
+          var errEl = document.getElementById('chart-error');
+          errEl.style.display = 'block';
+          errEl.textContent = 'Veri yuklenemedi: ' + e.message;
+        });
     }
 
     function switchTF(interval, btn) {
